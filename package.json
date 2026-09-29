@@ -1,0 +1,12 @@
+{
+  "name": "gre-practice",
+  "version": "1.0.0",
+  "description": "GRE-style adaptive practice: daily modules + full-length mock tests",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=18" }
+}

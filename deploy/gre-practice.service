@@ -1,0 +1,18 @@
+[Unit]
+Description=GRE Practice Lab (port 8888)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/gre
+Environment=PORT=8888 NODE_ENV=production
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

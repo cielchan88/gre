@@ -1,0 +1,562 @@
+// Parametric Quantitative Reasoning generators. Every answer is computed from the
+// generated numbers (never typed by hand), and difficulty 1..5 scales the number of
+// reasoning steps / traps. `generate(gen, d, seed)` is deterministic per seed.
+import { makeRng, gcd, lcm, fmt, money, frac, sup, signed, numChoices, textChoices, reduceFrac, clamp } from './util.js';
+
+const cmp = (a, b) => (a > b ? 0 : a < b ? 1 : 2);
+const poly = (a, b, c) => {
+  let s = a === 1 ? 'x<sup>2</sup>' : `${a}x<sup>2</sup>`;
+  if (b) s += (b < 0 ? ' − ' : ' + ') + (Math.abs(b) === 1 ? '' : Math.abs(b)) + 'x';
+  if (c) s += signed(c);
+  return s;
+};
+const fig = (svg) => `<svg class="fig" viewBox="0 0 240 170" role="img">${svg}</svg>`;
+const sqrtStr = (k, r) => (k === 1 ? `√${r}` : `${k}√${r}`);
+
+function rightTriFigure(v, h, hyp) {
+  return fig(
+    `<polygon points="40,140 200,140 40,30" fill="none" stroke="currentColor" stroke-width="2"/>` +
+    `<path d="M40,124 h16 v16" fill="none" stroke="currentColor"/>` +
+    `<text x="22" y="90" text-anchor="middle">${v}</text>` +
+    `<text x="120" y="160" text-anchor="middle">${h}</text>` +
+    `<text x="135" y="78" text-anchor="start">${hyp}</text>`);
+}
+
+const TRIPLES = [[3, 4, 5], [5, 12, 13], [8, 15, 17], [7, 24, 25], [20, 21, 29], [9, 40, 41]];
+
+export const GENERATORS = [
+  // ───────────────────────── ARITHMETIC ─────────────────────────
+  { id: 'pct_chain', topic: 'arithmetic', type: 'ne', make(r, d) {
+    const up = r.pick([10, 20, 25, 30, 40, 50]), down = r.pick([10, 20, 25, 40, 50]);
+    const P = r.pick([80, 100, 200, 400, 500]);
+    if (d <= 1) {
+      const ans = P * (100 - down) / 100;
+      return { stem: `A jacket originally priced at ${money(P)} is on sale for ${down}% off. What is the sale price, in dollars?`, answer: { value: ans },
+        explain: `Sale price = ${P} × (1 − ${down/100}) = ${fmt(ans)}.` };
+    }
+    if (d === 2) {
+      const ans = P * (100 + up) / 100;
+      return { stem: `The price of a ticket increased ${up}% from an original price of ${money(P)}. What is the new price, in dollars?`, answer: { value: ans },
+        explain: `New price = ${P} × ${(100 + up) / 100} = ${fmt(ans)}.` };
+    }
+    if (d === 3 || d === 4) {
+      const ans = (100 + up) * (100 - down) / 100;
+      return { stem: `The price of an item is increased by ${up}% and the new price is then decreased by ${down}%. The final price is what percent of the original price? (Enter the percent as a number, e.g. 85 for 85%.)`, answer: { value: +ans.toFixed(6) },
+        explain: `Multiply the multipliers: ${(100 + up) / 100} × ${(100 - down) / 100} = ${fmt(ans / 100)}, i.e. ${fmt(ans)}% of the original. Successive percent changes multiply; they do not add.` };
+    }
+    const F = P * (100 + up) * (100 - down) / 10000;
+    return { stem: `After a ${up}% increase followed by a ${down}% decrease, the price of a camera is ${money(F)}. What was the original price, in dollars?`, answer: { value: P },
+      explain: `Final = Original × ${(100 + up) / 100} × ${(100 - down) / 100}, so Original = ${fmt(F)} ÷ ${fmt((100 + up) * (100 - down) / 10000)} = ${P}.` };
+  } },
+
+  { id: 'ratio_share', topic: 'arithmetic', type: 'ne', make(r, d) {
+    const parts = d >= 4 ? 3 : 2;
+    let xs;
+    do { xs = Array.from({ length: parts }, () => r.int(1, 9)); } while (parts === 3 ? new Set(xs).size < 3 : xs[0] === xs[1]);
+    const k = r.int(2, 12) * (d >= 3 ? 3 : 1);
+    const names = ['A', 'B', 'C'].slice(0, parts);
+    const ratio = xs.join(' : ');
+    const tgt = r.int(0, parts - 1);
+    if (d <= 2) {
+      const total = k * xs.reduce((s, v) => s + v, 0);
+      return { stem: `The ratio of ${names.join(' to ')} is ${ratio}. If the total is ${total}, what is the value of ${names[tgt]}?`, answer: { value: k * xs[tgt] },
+        explain: `The ratio has ${xs.reduce((s, v) => s + v, 0)} parts, so one part = ${total} ÷ ${xs.reduce((s, v) => s + v, 0)} = ${k}. ${names[tgt]} = ${xs[tgt]} × ${k} = ${k * xs[tgt]}.` };
+    }
+    const hi = xs.indexOf(Math.max(...xs)), lo = xs.indexOf(Math.min(...xs));
+    const diff = k * (xs[hi] - xs[lo]);
+    const total = k * xs.reduce((s, v) => s + v, 0);
+    return { stem: `The amounts of money held by ${names.join(', ')} are in the ratio ${ratio}. ${names[hi]} has $${diff} more than ${names[lo]}. What is the total amount held by all of them, in dollars?`, answer: { value: total },
+      explain: `${names[hi]} − ${names[lo]} = ${xs[hi] - xs[lo]} parts = $${diff}, so one part = $${k}. Total parts = ${xs.reduce((s, v) => s + v, 0)}, so total = $${total}.` };
+  } },
+
+  { id: 'remainder', topic: 'arithmetic', type: 'ne', make(r, d) {
+    if (d <= 2) {
+      const m = r.int(5, 9), n = r.int(120, 990);
+      return { stem: `What is the remainder when ${n} is divided by ${m}?`, answer: { value: n % m },
+        explain: `${n} = ${m} × ${Math.floor(n / m)} + ${n % m}.` };
+    }
+    if (d === 3) {
+      const m = r.pick([5, 7, 9, 11]), a = r.int(1, m - 1), b = r.int(1, m - 1);
+      return { stem: `When the positive integer n is divided by ${m}, the remainder is ${a}. When the positive integer k is divided by ${m}, the remainder is ${b}. What is the remainder when n + k is divided by ${m}? (If n + k is a multiple of ${m}, enter 0.)`, answer: { value: (a + b) % m },
+        explain: `Remainders add: ${a} + ${b} = ${a + b}, and ${a + b} leaves remainder ${(a + b) % m} when divided by ${m}.` };
+    }
+    if (d === 4) {
+      const m = r.pick([5, 7, 8, 9]), a = r.int(2, m - 1), b = r.int(2, m - 1);
+      return { stem: `When n is divided by ${m}, the remainder is ${a}. When k is divided by ${m}, the remainder is ${b}. What is the remainder when nk is divided by ${m}?`, answer: { value: (a * b) % m },
+        explain: `Remainders multiply: ${a} × ${b} = ${a * b}, which leaves remainder ${(a * b) % m} on division by ${m}.` };
+    }
+    const base = r.pick([2, 3, 4, 7, 8, 9]), e = r.int(21, 99);
+    let x = 1; for (let i = 0; i < e; i++) x = (x * base) % 10;
+    return { stem: `What is the units (ones) digit of ${sup(base, e)}?`, answer: { value: x },
+      explain: `Units digits of powers of ${base} repeat in a cycle. Reducing the exponent ${e} modulo the cycle length gives a units digit of ${x}.` };
+  } },
+
+  { id: 'qc_numeric', topic: 'arithmetic', type: 'qc', make(r, d) {
+    if (d <= 1) {
+      const a = r.int(1, 8), b = r.int(a + 1, 9), c = r.int(1, 8), e = r.int(c + 1, 9);
+      return { qa: frac(a, b), qb: frac(c, e), answer: cmp(a / b, c / e),
+        explain: `Cross-multiply: ${a}×${e} = ${a * e} and ${c}×${b} = ${c * b}. ${a * e > c * b ? 'A is larger' : a * e < c * b ? 'B is larger' : 'They are equal'}.` };
+    }
+    if (d === 2) {
+      const x = r.pick([12, 15, 16, 24, 30, 36, 45, 60]), y = r.pick([25, 40, 50, 80, 120, 150]);
+      return { qa: `${x}% of ${y}`, qb: `${y}% of ${x}`, answer: 2,
+        explain: `x% of y = xy/100 = y% of x. Both equal ${x * y / 100}.` };
+    }
+    if (d === 3) {
+      const b1 = r.int(2, 5), p = r.int(4, 9), b2 = r.int(2, 5) + 5, q = r.int(2, 4);
+      const A = BigInt(b1) ** BigInt(p), B = BigInt(b2) ** BigInt(q);
+      return { qa: sup(b1, p), qb: sup(b2, q), answer: A > B ? 0 : A < B ? 1 : 2,
+        explain: `${b1}^${p} = ${A} and ${b2}^${q} = ${B}.` };
+    }
+    if (d === 4) {
+      const a = r.pick([4, 9, 16, 25]), b = r.pick([9, 16, 25, 36]);
+      return { qa: `√${a} + √${b}`, qb: `√${a + b}`, answer: 0,
+        explain: `√a + √b is generally NOT √(a+b). Here A = ${Math.sqrt(a) + Math.sqrt(b)} and B ≈ ${Math.sqrt(a + b).toFixed(2)}, so A is greater. (Squaring A gives a + b + 2√(ab) > a + b.)` };
+    }
+    const mode = r.pick(['pos', 'neg', 'unk']);
+    const info = { pos: 'x and y are integers and xy > 0', neg: 'x and y are integers and xy < 0', unk: 'x and y are integers' }[mode];
+    return { info, qa: '(x + y)<sup>2</sup>', qb: 'x<sup>2</sup> + y<sup>2</sup>', answer: mode === 'pos' ? 0 : mode === 'neg' ? 1 : 3,
+      explain: `(x+y)² − (x²+y²) = 2xy. ${mode === 'pos' ? 'Since xy > 0, A is greater.' : mode === 'neg' ? 'Since xy < 0, the difference is negative, so B is greater.' : 'xy could be positive, negative, or zero, so the relationship cannot be determined.'}` };
+  } },
+
+  { id: 'gcd_lcm', topic: 'arithmetic', type: 'ne', make(r, d) {
+    if (d <= 2) {
+      const g = r.int(2, 9), a = r.int(2, 6), b = r.int(2, 6);
+      const useGcd = r.chance(0.5);
+      if (a === b) return this.make(r, d);
+      return { stem: `What is the ${useGcd ? 'greatest common divisor' : 'least common multiple'} of ${g * a} and ${g * b}?`, answer: { value: useGcd ? gcd(g * a, g * b) : lcm(g * a, g * b) },
+        explain: useGcd ? `Use prime factorizations; the GCD is ${gcd(g * a, g * b)}.` : `LCM = (${g * a} × ${g * b}) ÷ GCD = ${lcm(g * a, g * b)}.` };
+    }
+    const ns = r.shuffle([4, 6, 8, 9, 10, 12, 14, 15, 18, 20, 21, 24]).slice(0, 3);
+    return { stem: `What is the smallest positive integer that is divisible by each of ${ns[0]}, ${ns[1]}, and ${ns[2]}?`, answer: { value: lcm(lcm(ns[0], ns[1]), ns[2]) },
+      explain: `This is the least common multiple: LCM(${ns.join(', ')}) = ${lcm(lcm(ns[0], ns[1]), ns[2])}.` };
+  } },
+
+  { id: 'divisors', topic: 'arithmetic', type: 'ne', make(r, d) {
+    const primes = [2, 3, 5, 7];
+    const pick = r.shuffle(primes).slice(0, d >= 4 ? 3 : 2);
+    const exps = pick.map(() => r.int(1, d >= 4 ? 3 : 4));
+    const N = pick.reduce((p, q, i) => p * q ** exps[i], 1);
+    const count = exps.reduce((p, e) => p * (e + 1), 1);
+    const shown = d >= 4 ? String(N) : pick.map((q, i) => (exps[i] === 1 ? `${q}` : sup(q, exps[i]))).join(' × ');
+    return { stem: `How many positive divisors does ${shown} have? (Include 1 and the number itself.)`, answer: { value: count },
+      explain: `${N} = ${pick.map((q, i) => `${q}^${exps[i]}`).join(' × ')}. Number of divisors = ${exps.map((e) => `(${e}+1)`).join('')} = ${count}.` };
+  } },
+
+  { id: 'arith_seq', topic: 'arithmetic', type: 'ne', make(r, d) {
+    const a = r.int(-5, 20), dd = r.int(2, 9), n = r.int(8, 40);
+    if (d <= 3) return { stem: `In an arithmetic sequence the first term is ${fmt(a)} and the common difference is ${dd}. What is the ${n}th term?`, answer: { value: a + (n - 1) * dd },
+      explain: `a<sub>n</sub> = a<sub>1</sub> + (n−1)d = ${fmt(a)} + ${n - 1}×${dd} = ${a + (n - 1) * dd}.` };
+    return { stem: `What is the sum of the first ${n} terms of the arithmetic sequence whose first term is ${fmt(a)} and whose common difference is ${dd}?`, answer: { value: n * (2 * a + (n - 1) * dd) / 2 },
+      explain: `S = n(2a + (n−1)d)/2 = ${n}(${2 * a} + ${(n - 1) * dd})/2 = ${n * (2 * a + (n - 1) * dd) / 2}.` };
+  } },
+
+  { id: 'consecutive', topic: 'arithmetic', type: 'ne', make(r, d) {
+    const n = r.pick([3, 5, 7]);
+    if (d <= 3) {
+      const s = r.int(4, 40), S = n * s + n * (n - 1) / 2;
+      return { stem: `The sum of ${n} consecutive integers is ${S}. What is the greatest of these integers?`, answer: { value: s + n - 1 },
+        explain: `The middle integer is the mean, ${S}/${n} = ${S / n}. The greatest is ${S / n} + ${(n - 1) / 2} = ${s + n - 1}.` };
+    }
+    const s = 2 * r.int(3, 30), S = n * s + n * (n - 1);
+    return { stem: `The sum of ${n} consecutive even integers is ${S}. What is the greatest of these integers?`, answer: { value: s + 2 * (n - 1) },
+      explain: `The middle even integer is ${S}/${n} = ${S / n}; the greatest is ${S / n} + ${n - 1} = ${s + 2 * (n - 1)}.` };
+  } },
+
+  // ───────────────────────── ALGEBRA ─────────────────────────
+  { id: 'linear_eq', topic: 'algebra', type: 'ne', make(r, d) {
+    const x = r.int(-9, 12), a = r.int(2, 7), b = r.int(-9, 9), c = r.int(-9, 9);
+    if (d <= 2) {
+      const rhs = a * x + b;
+      return { stem: `If ${a}x ${b < 0 ? '−' : '+'} ${Math.abs(b)} = ${fmt(rhs)}, what is the value of x?`, answer: { value: x }, explain: `${a}x = ${fmt(rhs - b)}, so x = ${x}.` };
+    }
+    if (d === 3) {
+      const rhs = a * (x + b) + c;
+      return { stem: `If ${a}(x ${b < 0 ? '−' : '+'} ${Math.abs(b)}) ${c < 0 ? '−' : '+'} ${Math.abs(c)} = ${fmt(rhs)}, what is the value of x?`, answer: { value: x },
+        explain: `${a}(x ${signed(b).trim()}) = ${fmt(rhs - c)} → x ${signed(b).trim()} = ${fmt(x + b)} → x = ${x}.` };
+    }
+    const t = r.int(-6, 8), xx = b + a * t, rhs = t + c;
+    const e = d === 4 ? `(x ${b < 0 ? '+' : '−'} ${Math.abs(b)}) / ${a} ${c < 0 ? '−' : '+'} ${Math.abs(c)}` : `${frac(`x ${b < 0 ? '+' : '−'} ${Math.abs(b)}`, a)} ${c < 0 ? '−' : '+'} ${Math.abs(c)}`;
+    return { stem: `If ${e} = ${fmt(rhs)}, what is the value of x?`, answer: { value: xx },
+      explain: `Subtract ${c}: (x ${b < 0 ? '+' : '−'} ${Math.abs(b)})/${a} = ${t}. Multiply by ${a}: x ${b < 0 ? '+' : '−'} ${Math.abs(b)} = ${a * t}, so x = ${xx}.` };
+  } },
+
+  { id: 'system', topic: 'algebra', type: 'mc1', make(r, d) {
+    const x = r.int(1, 12), y = r.int(1, 12);
+    let p, q, u, v;
+    do { p = r.int(1, 5); q = r.int(1, 5); u = r.int(1, 4); v = -r.int(1, 4); } while (p * v - q * u === 0);
+    const s1 = p * x + q * y, s2 = u * x + v * y;
+    const eq = (a, b, s) => `${a === 1 ? '' : a}x ${b < 0 ? '−' : '+'} ${Math.abs(b) === 1 ? '' : Math.abs(b)}y = ${fmt(s)}`;
+    const askSum = d >= 3;
+    const ans = askSum ? x + y : x;
+    const { options, answer } = numChoices(r, ans, [x + y, x, y, x * y, ans + 2, ans - 2, s1 - s2, ans * 2]);
+    return { stem: `If ${eq(p, q, s1)} and ${eq(u, v, s2)}, what is the value of ${askSum ? 'x + y' : 'x'}?`, options, answer,
+      explain: `Solve the system (e.g. by elimination): x = ${x}, y = ${y}. So ${askSum ? 'x + y' : 'x'} = ${ans}.` };
+  } },
+
+  { id: 'quad_roots', topic: 'algebra', type: 'mcn', make(r, d) {
+    let r1, r2;
+    do { r1 = r.int(-7, 8); r2 = r.int(-7, 8); } while (r1 === r2 || r1 === 0 || r2 === 0);
+    const a = d <= 2 ? 1 : r.pick([1, 2, 3]);
+    const b = -a * (r1 + r2), c = a * r1 * r2;
+    const cands = r.shuffle([-r1, -r2, r1 + r2, r1 * r2, r1 + 1, r2 - 1, r1 - r2].filter((v) => v !== r1 && v !== r2));
+    const opts = r.shuffle([r1, r2, ...cands.slice(0, 4)].map((v) => v)).sort((m, n) => m - n);
+    const uniq = [...new Set(opts)];
+    return { stem: `If ${poly(a, b, c)} = 0, which of the following could be the value of x? Indicate <em>all</em> such values.`,
+      options: uniq.map(fmt), answer: uniq.map((v, i) => (v === r1 || v === r2 ? i : -1)).filter((i) => i >= 0),
+      explain: `${a === 1 ? '' : `Factor out ${a}: `}${a === 1 ? '' : `${a}`}(x ${r1 > 0 ? '−' : '+'} ${Math.abs(r1)})(x ${r2 > 0 ? '−' : '+'} ${Math.abs(r2)}) = 0, so x = ${r1} or x = ${r2}.`,
+      meta: { a, b, c, roots: [r1, r2] } };
+  } },
+
+  { id: 'ineq_mcn', topic: 'algebra', type: 'mcn', make(r, d) {
+    const c = r.int(-4, 6), k = r.int(2, 6);
+    const kind = d <= 2 ? 'lt' : d === 3 ? 'ge' : 'lin';
+    const A = r.int(2, 4);
+    const pred = kind === 'lt' ? (x) => Math.abs(x - c) < k : kind === 'ge' ? (x) => Math.abs(x - c) >= k : (x) => Math.abs(A * x - c) <= k;
+    const text = kind === 'lt' ? `|x ${c < 0 ? '+' : '−'} ${Math.abs(c)}| &lt; ${k}` : kind === 'ge' ? `|x ${c < 0 ? '+' : '−'} ${Math.abs(c)}| ≥ ${k}` : `|${A}x ${c < 0 ? '+' : '−'} ${Math.abs(c)}| ≤ ${k}`;
+    let vals;
+    for (let tries = 0; ; tries++) {
+      const pool = [];
+      for (let v = c - k - 5; v <= c + k + 5; v++) pool.push(v);
+      vals = r.shuffle(pool).slice(0, 6).sort((m, n) => m - n);
+      const t = vals.filter(pred).length;
+      if ((t >= 1 && t <= 4) || tries > 200) break;
+    }
+    const ans = vals.map((v, i) => (pred(v) ? i : -1)).filter((i) => i >= 0);
+    return { stem: `If ${text}, which of the following could be the value of x? Indicate <em>all</em> such values.`, options: vals.map(fmt), answer: ans,
+      explain: `Test each value in ${text}. The values that satisfy it are ${ans.map((i) => vals[i]).join(', ') || 'none'}.` };
+  } },
+
+  { id: 'func_eval', topic: 'algebra', type: 'mc1', make(r, d) {
+    if (d <= 3) {
+      const a = r.int(1, 4), b = r.int(-6, 6), c = r.int(-9, 9), k = r.int(-3, 4);
+      const ans = a * k * k + b * k + c;
+      const { options, answer } = numChoices(r, ans, [a * k * k - b * k + c, a * k + b * k + c, (a * k) ** 2 + b * k + c, ans + a, ans - b, a * k * k + b + c]);
+      return { stem: `If f(x) = ${poly(a, b, c)}, what is the value of f(${fmt(k)})?`, options, answer,
+        explain: `Substitute x = ${fmt(k)}: ${a}(${fmt(k)})² ${signed(b * k)} ${signed(c)} = ${ans}.` };
+    }
+    const m = r.int(2, 5), n = r.int(-5, 5), p = r.int(-4, 4), k = r.int(1, 4);
+    const g = k * k + p, ans = m * g + n;
+    const { options, answer } = numChoices(r, ans, [m * k + n + p, (m * k + n) ** 2 + p, g * m, k * k + p + m + n, ans + m, ans - m]);
+    return { stem: `If f(x) = ${m}x ${n < 0 ? '−' : '+'} ${Math.abs(n)} and g(x) = x<sup>2</sup> ${p < 0 ? '−' : '+'} ${Math.abs(p)}, what is the value of f(g(${k}))?`, options, answer,
+      explain: `First g(${k}) = ${k}² ${signed(p)} = ${g}. Then f(${g}) = ${m}(${g}) ${signed(n)} = ${ans}.` };
+  } },
+
+  // ───────────────────────── GEOMETRY ─────────────────────────
+  { id: 'rect', topic: 'geometry', type: 'ne', make(r, d) {
+    const L = r.int(4, 20), W = r.int(2, L - 1);
+    if (d <= 2) return { stem: `A rectangle has a length of ${L} and a perimeter of ${2 * (L + W)}. What is its area?`, answer: { value: L * W },
+      explain: `2(L + W) = ${2 * (L + W)} → W = ${W}. Area = ${L} × ${W} = ${L * W}.` };
+    if (d === 3) {
+      const [a, b, c] = r.pick(TRIPLES), k = r.int(1, 3);
+      return { stem: `A rectangle has a side of length ${a * k} and a diagonal of length ${c * k}. What is the area of the rectangle?`, answer: { value: a * k * b * k },
+        explain: `The other side is √(${c * k}² − ${a * k}²) = ${b * k}. Area = ${a * k} × ${b * k} = ${a * b * k * k}.` };
+    }
+    const dg = r.int(3, 20);
+    return { stem: `A square has a diagonal of length ${dg}. What is the area of the square?`, answer: { value: dg * dg / 2 },
+      explain: `For a square, area = diagonal² / 2 = ${dg * dg}/2 = ${fmt(dg * dg / 2)}.` };
+  } },
+
+  { id: 'circle', topic: 'geometry', type: 'mc1', make(r, d) {
+    const S = 'π';
+    if (d <= 2) {
+      const rad = r.int(2, 12), mode = r.pick(['r', 'd', 'c']);
+      const given = mode === 'r' ? `radius ${rad}` : mode === 'd' ? `diameter ${2 * rad}` : `circumference ${2 * rad}${S}`;
+      const good = `${rad * rad}${S}`;
+      const c = textChoices(r, good, [`${2 * rad}${S}`, `${rad}${S}`, `${4 * rad * rad}${S}`, `${2 * rad * rad}${S}`, `${(rad + 1) * (rad + 1)}${S}`]);
+      return { stem: `A circle has ${given}. What is its area?`, options: c.options, answer: c.answer, explain: `Radius = ${rad}, so area = πr² = ${good}.` };
+    }
+    const th = r.pick([45, 60, 90, 120, 180, 270]);
+    const mult = { 45: 4, 60: 6, 90: 2, 120: 3, 180: 2, 270: 2 }[th];
+    const rad = mult * r.int(1, 3);
+    const area = (th / 360) * rad * rad;
+    const c = textChoices(r, `${fmt(area)}${S}`, [`${fmt(rad * rad)}${S}`, `${fmt(2 * area)}${S}`, `${fmt(area / 2)}${S}`, `${fmt(th / 360 * 2 * rad)}${S}`, `${fmt(area + rad)}${S}`]);
+    return { stem: `A sector of a circle of radius ${rad} has a central angle of ${th}°. What is the area of the sector?`, options: c.options, answer: c.answer,
+      explain: `Sector area = (${th}/360) × π × ${rad}² = ${fmt(area)}π.` };
+  } },
+
+  { id: 'right_tri', topic: 'geometry', type: 'ne', make(r, d) {
+    const [a, b, c] = r.pick(TRIPLES), k = r.int(1, d >= 3 ? 2 : 1);
+    const A = a * k, B = b * k, C = c * k;
+    if (d <= 1) return { stem: `In the triangle shown, what is the length of the hypotenuse?`, figure: rightTriFigure(A, B, 'x'), answer: { value: C },
+      explain: `x = √(${A}² + ${B}²) = √${A * A + B * B} = ${C}.` };
+    if (d === 2) return { stem: `In the triangle shown, what is the length of the unlabeled side <em>x</em>?`, figure: rightTriFigure('x', B, C), answer: { value: A },
+      explain: `x = √(${C}² − ${B}²) = ${A}.` };
+    if (d === 3) return { stem: `A right triangle has legs of length ${A} and ${B}. What is its perimeter?`, answer: { value: A + B + C },
+      explain: `Hypotenuse = ${C}. Perimeter = ${A} + ${B} + ${C} = ${A + B + C}.` };
+    return { stem: `A right triangle has a hypotenuse of length ${C} and one leg of length ${A}. What is the area of the triangle?`, answer: { value: A * B / 2 },
+      explain: `Other leg = ${B}. Area = ½ × ${A} × ${B} = ${fmt(A * B / 2)}.` };
+  } },
+
+  { id: 'special_tri', topic: 'geometry', type: 'mc1', make(r, d) {
+    const k = r.int(2, 9);
+    const mode = r.pick(d >= 4 ? ['45b', '30'] : ['45a', '45b']);
+    if (mode === '45a') {
+      const good = sqrtStr(k, 2);
+      const c = textChoices(r, good, [`${k}`, `${2 * k}`, sqrtStr(2 * k, 2), sqrtStr(k, 3), `${k * k}`]);
+      return { stem: `An isosceles right triangle has legs of length ${k}. What is the length of its hypotenuse?`, options: c.options, answer: c.answer, explain: `Hypotenuse = leg × √2 = ${good}.` };
+    }
+    if (mode === '45b') {
+      const good = `${k}`;
+      const c = textChoices(r, good, [`${k}√2`, sqrtStr(2 * k, 2), `${2 * k}`, `${k + 1}`, `${k * 2 + 1}`]);
+      return { stem: `The hypotenuse of an isosceles right triangle is ${sqrtStr(k, 2)}. What is the length of each leg?`, options: c.options, answer: c.answer, explain: `Leg = hypotenuse ÷ √2 = ${k}.` };
+    }
+    const good = sqrtStr(k, 3);
+    const c = textChoices(r, good, [`${2 * k}`, sqrtStr(2 * k, 3), sqrtStr(k, 2), `${3 * k}`, `${k}`]);
+    return { stem: `In a right triangle with angles of 30°, 60°, and 90°, the shortest side has length ${k}. What is the length of the other leg (the side opposite the 60° angle)?`, options: c.options, answer: c.answer,
+      explain: `Sides of a 30–60–90 triangle are in the ratio 1 : √3 : 2, so the leg opposite 60° is ${k}√3.` };
+  } },
+
+  { id: 'angles', topic: 'geometry', type: 'ne', make(r, d) {
+    if (d <= 2) {
+      const [x, y, z] = r.pick([[1, 2, 3], [2, 3, 4], [3, 4, 5], [1, 4, 5], [2, 3, 5]]);
+      const unit = 180 / (x + y + z), big = r.chance(0.5);
+      return { stem: `The measures of the angles of a triangle are in the ratio ${x} : ${y} : ${z}. What is the measure, in degrees, of the ${big ? 'largest' : 'smallest'} angle?`, answer: { value: unit * (big ? z : x) },
+        explain: `Angles sum to 180°, so one part = 180/${x + y + z} = ${unit}°. The ${big ? 'largest' : 'smallest'} angle = ${unit * (big ? z : x)}°.` };
+    }
+    const n = r.pick([5, 6, 8, 9, 10, 12, 15, 18, 20]);
+    if (d === 3) return { stem: `What is the sum, in degrees, of the interior angles of a convex polygon with ${n} sides?`, answer: { value: 180 * (n - 2) },
+      explain: `Sum = 180(n − 2) = 180 × ${n - 2} = ${180 * (n - 2)}.` };
+    return { stem: `Each interior angle of a regular polygon measures ${180 * (n - 2) / n}°. How many sides does the polygon have?`, answer: { value: n },
+      explain: `Each exterior angle = 180 − ${180 * (n - 2) / n} = ${360 / n}°, and exterior angles sum to 360°, so n = 360/${360 / n} = ${n}.` };
+  } },
+
+  { id: 'coord', topic: 'geometry', type: 'ne', make(r, d) {
+    const x1 = r.int(-6, 6), y1 = r.int(-6, 6);
+    if (d <= 2) {
+      const [a, b, c] = r.pick(TRIPLES.slice(0, 2)), sx = r.chance(0.5) ? 1 : -1, sy = r.chance(0.5) ? 1 : -1;
+      return { stem: `In the xy-plane, what is the distance between the points (${fmt(x1)}, ${fmt(y1)}) and (${fmt(x1 + sx * a)}, ${fmt(y1 + sy * b)})?`, answer: { value: c },
+        explain: `Distance = √(${a}² + ${b}²) = ${c}.` };
+    }
+    if (d === 3) {
+      const dx = r.int(1, 6), dy = r.int(1, 9);
+      return { stem: `In the xy-plane, what is the slope of the line that passes through the points (${fmt(x1)}, ${fmt(y1)}) and (${fmt(x1 + dx)}, ${fmt(y1 + dy)})? (You may enter a fraction.)`, answer: { value: dy / dx },
+        explain: `Slope = rise/run = ${dy}/${dx} = ${fmt(dy / dx)}.`, fraction: true };
+    }
+    const mx = r.int(-5, 8), my = r.int(-5, 8);
+    return { stem: `In the xy-plane, the midpoint of segment AB is (${mx}, ${my}). If A = (${fmt(x1)}, ${fmt(y1)}), what is the sum of the coordinates of B?`, answer: { value: (2 * mx - x1) + (2 * my - y1) },
+      explain: `B = (2·${mx} − ${fmt(x1)}, 2·${my} − ${fmt(y1)}) = (${2 * mx - x1}, ${2 * my - y1}). The sum is ${2 * mx - x1 + 2 * my - y1}.` };
+  } },
+
+  { id: 'box', topic: 'geometry', type: 'ne', make(r, d) {
+    const a = r.int(2, 9), b = r.int(2, 9), c = r.int(2, 9);
+    if (d <= 3) return { stem: `A rectangular box measures ${a} by ${b} by ${c}. What is its total surface area?`, answer: { value: 2 * (a * b + b * c + a * c) },
+      explain: `SA = 2(ab + bc + ac) = 2(${a * b} + ${b * c} + ${a * c}) = ${2 * (a * b + b * c + a * c)}.` };
+    return { stem: `The three different faces of a rectangular box have areas ${a * b}, ${b * c}, and ${a * c}. What is the volume of the box?`, answer: { value: a * b * c },
+      explain: `(ab)(bc)(ac) = (abc)² = ${(a * b * c) ** 2}, so the volume abc = ${a * b * c}.` };
+  } },
+
+  { id: 'qc_geo', topic: 'geometry', type: 'qc', make(r, d) {
+    const rad = r.int(2, 9), s = r.int(2 * rad - 1, 2 * rad + 2);
+    const A = Math.PI * rad * rad, B = s * s;
+    if (Math.abs(A - B) < 1) return this.make(r, d);
+    return { qa: `The area of a circle with radius ${rad}`, qb: `The area of a square with side length ${s}`, answer: cmp(A, B),
+      explain: `Circle: π × ${rad}² ≈ ${A.toFixed(1)}. Square: ${s}² = ${B}. ${A > B ? 'A' : 'B'} is greater.` };
+  } },
+
+  // ───────────────────────── DATA ANALYSIS ─────────────────────────
+  { id: 'stats_qc', topic: 'data', type: 'qc', make(r, d) {
+    const n = r.pick([5, 7]);
+    const base = r.int(2, 20);
+    const list = Array.from({ length: n }, () => base + r.int(0, 3 + d * 3)).sort((a, b) => a - b);
+    if (d >= 3) list[n - 1] += r.int(10, 40);
+    const mean = list.reduce((s, v) => s + v, 0) / n, median = list[(n - 1) / 2];
+    return { info: `A set of numbers: ${r.shuffle(list).join(', ')}`, qa: 'The mean of the set', qb: 'The median of the set', answer: cmp(mean, median),
+      explain: `Mean = ${list.reduce((s, v) => s + v, 0)}/${n} = ${fmt(+mean.toFixed(3))}; median = ${median}. ${mean > median ? 'A' : mean < median ? 'B' : 'They are equal'}${mean === median ? '' : ' is greater'}.` };
+  } },
+
+  { id: 'mean_ne', topic: 'data', type: 'ne', make(r, d) {
+    if (d <= 2) {
+      const n = r.int(4, 6), avg = r.int(10, 40), xs = Array.from({ length: n - 1 }, () => avg + r.int(-8, 8));
+      const missing = avg * n - xs.reduce((s, v) => s + v, 0);
+      return { stem: `The average (arithmetic mean) of ${n} numbers is ${avg}. ${n - 1} of the numbers are ${xs.join(', ')}. What is the remaining number?`, answer: { value: missing },
+        explain: `Total = ${n} × ${avg} = ${avg * n}. Missing = ${avg * n} − ${xs.reduce((s, v) => s + v, 0)} = ${missing}.` };
+    }
+    const [n1, n2] = r.pick([[4, 6], [3, 7], [2, 8], [5, 15], [8, 12], [5, 20], [10, 15]]);
+    const m1 = r.int(50, 90), m2 = r.int(50, 90);
+    const ans = (n1 * m1 + n2 * m2) / (n1 + n2);
+    return { stem: `Class A has ${n1} students with an average score of ${m1}. Class B has ${n2} students with an average score of ${m2}. What is the average score of all ${n1 + n2} students combined? (Enter a decimal if necessary.)`, answer: { value: ans },
+      explain: `Total points = ${n1}×${m1} + ${n2}×${m2} = ${n1 * m1 + n2 * m2}. Divide by ${n1 + n2}: ${fmt(ans)}.` };
+  } },
+
+  { id: 'prob', topic: 'data', type: 'ne', make(r, d) {
+    let num, den, stem, explain;
+    if (d <= 2 && r.chance(0.5)) {
+      const s = r.int(4, 9);
+      const ways = { 4: 3, 5: 4, 6: 5, 7: 6, 8: 5, 9: 4 }[s];
+      ({ num, den } = reduceFrac(ways, 36));
+      stem = `Two fair six-sided dice are rolled. What is the probability that the sum of the numbers is ${s}?`;
+      explain = `${ways} of the 36 equally likely outcomes give a sum of ${s}, so P = ${ways}/36 = ${num}/${den}.`;
+    } else {
+      const red = r.int(2, 8), blue = r.int(2, 8), green = d >= 3 ? r.int(1, 5) : 0, tot = red + blue + green;
+      const bag = `${red} red${green ? ',' : ' and'} ${blue} blue${green ? `, and ${green} green` : ''} marbles`;
+      if (d <= 2) {
+        ({ num, den } = reduceFrac(red, tot));
+        stem = `A bag contains ${bag}. If one marble is chosen at random, what is the probability that it is red?`;
+        explain = `P = ${red}/${tot} = ${num}/${den}.`;
+      } else if (d === 3) {
+        ({ num, den } = reduceFrac(red * (red - 1), tot * (tot - 1)));
+        stem = `A bag contains ${bag}. Two marbles are drawn at random without replacement. What is the probability that both are red?`;
+        explain = `P = (${red}/${tot}) × (${red - 1}/${tot - 1}) = ${num}/${den}.`;
+      } else {
+        const same = (red * (red - 1) + blue * (blue - 1) + green * (green - 1));
+        ({ num, den } = reduceFrac(tot * (tot - 1) - same, tot * (tot - 1)));
+        stem = `A bag contains ${bag}. Two marbles are drawn at random without replacement. What is the probability that they are different colors?`;
+        explain = `P(different) = 1 − P(same). P(same) = (${red}·${red - 1} + ${blue}·${blue - 1}${green ? ` + ${green}·${green - 1}` : ''})/(${tot}·${tot - 1}). So P(different) = ${num}/${den}.`;
+      }
+    }
+    return { stem: stem + ' (Enter your answer as a fraction.)', answer: { num, den, value: num / den }, fraction: true, explain };
+  } },
+
+  { id: 'counting', topic: 'data', type: 'ne', make(r, d) {
+    const C = (n, k) => { let x = 1; for (let i = 1; i <= k; i++) x = x * (n - k + i) / i; return Math.round(x); };
+    const F = (n) => (n <= 1 ? 1 : n * F(n - 1));
+    if (d <= 2) {
+      const n = r.int(6, 10), k = r.int(2, 3);
+      return { stem: `A committee of ${k} people is to be chosen from a group of ${n} people. How many different committees are possible?`, answer: { value: C(n, k) },
+        explain: `Order does not matter: C(${n},${k}) = ${C(n, k)}.` };
+    }
+    if (d === 3) {
+      const n = r.int(4, 6);
+      return { stem: `${n} people are to be seated in a row of ${n} chairs. If two particular people must sit next to each other, how many seating arrangements are possible?`, answer: { value: 2 * F(n - 1) },
+        explain: `Treat the pair as one unit: (${n} − 1)! = ${F(n - 1)} arrangements, times 2 orders within the pair = ${2 * F(n - 1)}.` };
+    }
+    const w = r.pick(['LETTER', 'BANANA', 'TOOTH', 'BALLOON', 'PEPPER', 'COFFEE', 'MISSISSIPPI', 'STATISTICS']);
+    const cnt = {}; for (const ch of w) cnt[ch] = (cnt[ch] || 0) + 1;
+    const ans = Object.values(cnt).reduce((p, c) => p / F(c), F(w.length));
+    return { stem: `How many distinct arrangements of the letters in the word ${w} are there?`, answer: { value: Math.round(ans) },
+      explain: `${w.length}! divided by the factorial of each repeated letter's count: ${w.length}!/(${Object.values(cnt).filter((c) => c > 1).map((c) => c + '!').join(' × ') || '1'}) = ${Math.round(ans)}.` };
+  } },
+
+  { id: 'table_mc', topic: 'data', type: 'mc1', make(r, d) {
+    const years = [2019, 2020, 2021, 2022];
+    const cats = r.pick([['Product X', 'Product Y'], ['Store North', 'Store South'], ['Region East', 'Region West']]);
+    const unit = r.pick(['units sold (in thousands)', 'sales (in thousands of dollars)']);
+    const mk = () => { const b = r.pick([20, 40, 60, 80, 100, 120]); return years.map((_, i) => (i === 0 ? b : Math.round(b * r.pick([0.75, 0.8, 1, 1.1, 1.25, 1.5]) / 5) * 5 || b)); };
+    const X = mk(), Y = mk();
+    const table = `<table class="data"><caption>Annual ${unit}</caption><tr><th></th>${years.map((y) => `<th>${y}</th>`).join('')}</tr><tr><th>${cats[0]}</th>${X.map((v) => `<td>${v}</td>`).join('')}</tr><tr><th>${cats[1]}</th>${Y.map((v) => `<td>${v}</td>`).join('')}</tr></table>`;
+    if (d <= 2) {
+      const i = r.int(0, 2);
+      const ans = X[i + 1] - X[i];
+      const { options, answer } = numChoices(r, ans, [Y[i + 1] - Y[i], X[i + 1] + X[i], X[i], X[i + 1], Math.abs(ans) + 5, -ans]);
+      return { stem: `By how many thousand did the ${unit.split(' ')[0]} of ${cats[0]} change from ${years[i]} to ${years[i + 1]}? (A negative number indicates a decrease.)`, table, options, answer,
+        explain: `${X[i + 1]} − ${X[i]} = ${ans}.` };
+    }
+    if (d === 3) {
+      const totals = years.map((_, i) => X[i] + Y[i]);
+      const best = totals.indexOf(Math.max(...totals));
+      if (totals.filter((t) => t === totals[best]).length > 1) return this.make(r, d);
+      return { stem: `In which year was the combined total for the two rows greatest?`, table, options: years.map(String), answer: best,
+        explain: `Totals by year: ${years.map((y, i) => `${y}: ${totals[i]}`).join('; ')}. The greatest is ${years[best]}.` };
+    }
+    const i = r.int(0, 1), j = i + 2;
+    const pct = (X[j] - X[i]) / X[i] * 100;
+    const { options, answer } = numChoices(r, pct, [pct + 10, pct - 10, (X[j] - X[i]), X[j] / X[i] * 100, -pct, pct * 2], (v) => fmt(+v.toFixed(2)) + '%');
+    return { stem: `What was the percent change in ${cats[0]}'s figure from ${years[i]} to ${years[j]}? (A negative sign indicates a decrease.)`, table, options, answer,
+      explain: `Percent change = (${X[j]} − ${X[i]}) / ${X[i]} × 100 = ${fmt(+pct.toFixed(2))}%.` };
+  } },
+
+  { id: 'venn', topic: 'data', type: 'ne', make(r, d) {
+    const both = r.int(3, 15), oa = r.int(5, 25), ob = r.int(5, 25), none = r.int(2, 12);
+    const T = both + oa + ob + none, A = both + oa, B = both + ob;
+    if (d <= 3) return { stem: `Of ${T} students, ${A} take French, ${B} take Spanish, and ${none} take neither language. How many students take both French and Spanish?`, answer: { value: both },
+      explain: `Students taking at least one = ${T} − ${none} = ${T - none}. Both = ${A} + ${B} − ${T - none} = ${both}.` };
+    return { stem: `Of ${T} students, ${A} take French, ${B} take Spanish, and ${none} take neither. How many students take exactly one of the two languages?`, answer: { value: oa + ob },
+      explain: `Both = ${A} + ${B} − ${T - none} = ${both}. Exactly one = (${A} − ${both}) + (${B} − ${both}) = ${oa + ob}.` };
+  } },
+
+  // ───────────────────────── WORD PROBLEMS ─────────────────────────
+  { id: 'rate_dist', topic: 'word', type: 'ne', make(r, d) {
+    if (d <= 1) {
+      const s = r.int(40, 70), t = r.int(2, 6);
+      return { stem: `A car travels at a constant speed of ${s} miles per hour. How many miles does it travel in ${t} hours?`, answer: { value: s * t }, explain: `Distance = rate × time = ${s} × ${t} = ${s * t}.` };
+    }
+    if (d === 2) {
+      const sa = r.int(30, 60), sb = r.int(30, 60), t = r.int(2, 5);
+      return { stem: `Two trains start ${(sa + sb) * t} miles apart and travel toward each other at constant speeds of ${sa} and ${sb} miles per hour. How many hours until they meet?`, answer: { value: t },
+        explain: `They close the gap at ${sa} + ${sb} = ${sa + sb} mph, so time = ${(sa + sb) * t}/${sa + sb} = ${t} hours.` };
+    }
+    if (d === 3) {
+      const [a, b] = r.pick([[40, 60], [30, 60], [20, 30], [60, 90], [12, 24], [50, 75]]);
+      const avg = 2 * a * b / (a + b);
+      return { stem: `A driver travels from town P to town Q at ${a} miles per hour and returns along the same route at ${b} miles per hour. What is the average speed, in miles per hour, for the entire round trip?`, answer: { value: avg },
+        explain: `Average speed = total distance / total time = 2ab/(a+b) = 2·${a}·${b}/${a + b} = ${fmt(avg)}. It is NOT the simple average ${(a + b) / 2}.` };
+    }
+    const delta = r.pick([10, 15, 20]), m = r.int(2, 4), sa = delta * m, h = r.int(1, 3);
+    return { stem: `Cyclist A leaves a station traveling at ${sa} miles per hour. ${h === 1 ? 'One hour' : h + ' hours'} later, cyclist B leaves the same station on the same route traveling at ${sa + delta} miles per hour. How many hours after B departs does B catch up with A?`, answer: { value: h * m },
+      explain: `When B starts, A leads by ${sa * h} miles. B gains ${delta} mph, so B needs ${sa * h}/${delta} = ${h * m} hours.` };
+  } },
+
+  { id: 'work', topic: 'word', type: 'ne', make(r, d) {
+    if (d <= 3) {
+      const [a, b] = r.pick([[6, 3], [12, 6], [10, 15], [12, 4], [20, 30], [15, 10], [30, 20], [8, 8], [9, 18]]);
+      const t = a * b / (a + b);
+      return { stem: `Machine A can complete a job in ${a} hours and machine B can complete the same job in ${b} hours. Working together at their constant rates, how many hours will it take them to complete the job?`, answer: { value: t },
+        explain: `Combined rate = 1/${a} + 1/${b} = ${a + b}/${a * b} of the job per hour, so time = ${a * b}/${a + b} = ${fmt(t)} hours.` };
+    }
+    const [a, b, c] = r.pick([[12, 6, 4], [10, 15, 30], [6, 3, 2], [20, 30, 60], [15, 10, 6]]);
+    const t = 1 / (1 / a + 1 / b + 1 / c);
+    return { stem: `Three pumps can empty a tank in ${a}, ${b}, and ${c} hours, respectively, when working alone. How many hours will it take to empty the tank if all three work together at their constant rates?`, answer: { value: +t.toFixed(6) },
+      explain: `Combined rate = 1/${a} + 1/${b} + 1/${c} = ${fmt(+(1 / t).toFixed(6))} tank per hour, so time = ${fmt(+t.toFixed(6))} hours.` };
+  } },
+
+  { id: 'interest', topic: 'word', type: 'ne', make(r, d) {
+    const P = r.pick([400, 800, 1200, 2000, 4000]), rate = r.pick([5, 10, 20]);
+    if (d <= 2) {
+      const t = r.int(2, 5);
+      return { stem: `How much simple interest, in dollars, is earned on ${money(P)} invested at ${rate}% per year for ${t} years?`, answer: { value: P * rate * t / 100 },
+        explain: `I = Prt = ${P} × ${rate / 100} × ${t} = ${P * rate * t / 100}.` };
+    }
+    const bal = P * (100 + rate) * (100 + rate) / 10000;
+    if (d === 3) return { stem: `An investment of ${money(P)} earns ${rate}% interest per year, compounded annually. What is the value of the investment, in dollars, after 2 years?`, answer: { value: bal },
+      explain: `${P} × ${(100 + rate) / 100}² = ${fmt(bal)}.` };
+    return { stem: `An investment of ${money(P)} earns ${rate}% interest per year, compounded annually. How much more interest, in dollars, is earned in 2 years than would be earned with simple interest at the same rate?`, answer: { value: bal - P - P * rate * 2 / 100 },
+      explain: `Compound interest = ${fmt(bal)} − ${P} = ${fmt(bal - P)}. Simple interest = ${P * rate * 2 / 100}. Difference = ${fmt(bal - P - P * rate * 2 / 100)}.` };
+  } },
+
+  { id: 'mixture', topic: 'word', type: 'ne', make(r, d) {
+    if (d <= 3) {
+      const [x, y] = r.pick([[4, 6], [2, 8], [5, 5], [10, 10], [5, 20], [10, 15], [20, 20], [30, 20]]);
+      const a = r.pick([10, 20, 30]), b = r.pick([40, 50, 60, 80]);
+      const ans = (x * a + y * b) / (x + y);
+      return { stem: `${x} liters of a ${a}% salt solution are mixed with ${y} liters of a ${b}% salt solution. What is the percent concentration of salt in the resulting mixture?`, answer: { value: ans },
+        explain: `Salt = ${x}×${a / 100} + ${y}×${b / 100} = ${fmt((x * a + y * b) / 100)} liters in ${x + y} liters: ${fmt(ans)}%.` };
+    }
+    const [a, c] = r.pick([[30, 20], [40, 25], [60, 40], [50, 20], [20, 10], [45, 30]]), x = r.pick([20, 40, 60, 80, 100]);
+    const water = x * (a - c) / c;
+    return { stem: `How many liters of pure water must be added to ${x} liters of a ${a}% acid solution to produce a ${c}% acid solution?`, answer: { value: water },
+      explain: `Acid stays constant: ${x}×${a / 100} = ${fmt(x * a / 100)} L. New total volume = ${fmt(x * a / 100)}/${c / 100} = ${fmt(x * a / c)} L, so water added = ${fmt(x * a / c)} − ${x} = ${fmt(water)}.` };
+  } },
+
+  { id: 'markup', topic: 'word', type: 'ne', make(r, d) {
+    const C = r.pick([40, 50, 80, 100, 200]), m = r.pick([20, 25, 40, 50, 60]), off = r.pick([10, 20, 25]);
+    if (d <= 3) {
+      const sp = C * (100 + m) / 100;
+      return { stem: `A store buys a lamp for ${money(C)} and marks it up by ${m}% to set the selling price. What is the selling price, in dollars?`, answer: { value: sp }, explain: `${C} × ${(100 + m) / 100} = ${fmt(sp)}.` };
+    }
+    const fin = C * (100 + m) * (100 - off) / 10000;
+    return { stem: `A retailer marks up the cost of a chair by ${m}% and then offers a ${off}% discount off the marked price. If the final selling price is ${money(fin)}, what was the retailer's cost, in dollars?`, answer: { value: C },
+      explain: `Final = Cost × ${(100 + m) / 100} × ${(100 - off) / 100} = Cost × ${fmt((100 + m) * (100 - off) / 10000)}. Cost = ${fmt(fin)}/${fmt((100 + m) * (100 - off) / 10000)} = ${C}.` };
+  } },
+
+  { id: 'machines', topic: 'word', type: 'ne', make(r, d) {
+    const m1 = r.int(2, 6), h1 = r.int(2, 6), k = r.int(3, 12), w = k * m1 * h1;
+    let m2 = r.int(2, 9), h2 = r.int(2, 9);
+    if (d <= 3) return { stem: `${m1} identical machines, working at the same constant rate, produce ${w} widgets in ${h1} hours. At this rate, how many widgets would ${m2} of these machines produce in ${h2} hours?`, answer: { value: k * m2 * h2 },
+      explain: `Each machine makes ${w}/(${m1}×${h1}) = ${k} widgets per hour. ${m2} machines × ${h2} hours × ${k} = ${k * m2 * h2}.` };
+    m2 = m1 * r.int(2, 3);
+    const target = k * m2 * r.int(2, 5);
+    return { stem: `${m1} identical machines, working at the same constant rate, produce ${w} widgets in ${h1} hours. How many hours would it take ${m2} of these machines to produce ${target} widgets?`, answer: { value: target / (k * m2) },
+      explain: `Each machine makes ${k} widgets/hour, so ${m2} machines make ${k * m2}/hour. Time = ${target}/${k * m2} = ${target / (k * m2)} hours.` };
+  } },
+];
+
+const BY_ID = Object.fromEntries(GENERATORS.map((g) => [g.id, g]));
+
+export function generate(gen, d, seed) {
+  d = clamp(Math.round(d), 1, 5);
+  const g = typeof gen === 'string' ? BY_ID[gen] : gen;
+  const r = makeRng(seed);
+  const out = g.make(r, d);
+  return { id: `g:${g.id}:${d}:${seed}`, section: 'Q', type: g.type, topic: g.topic, difficulty: d, gen: g.id, seed, ...out };
+}
