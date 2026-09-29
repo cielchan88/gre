@@ -139,3 +139,13 @@ details.rv summary { display: flex; gap: 12px; padding: 10px 14px; cursor: point
 details.rv > .qwrap, details.rv > .rc-layout, details.rv > .expl { padding: 0 16px 14px; } details.rv .expl { border-top: 1px dashed var(--line); margin: 0 16px; padding: 10px 0 4px; }
 #rvlist[data-filter=bad] details.ok { display: none; }
 .filter { display: flex; gap: 8px; margin: 8px 0; }
+
+.essay-panel { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.essay-fb { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
+.essay-fb.ai { border-color: var(--accent); }
+.essay-score span { font-size: 2.4rem; font-weight: 800; } .essay-score small { color: var(--muted); margin-left: 8px; }
+.fb-list { padding-left: 18px; } .fb-list li.good::marker { content: "\2714  "; color: var(--ok); } .fb-list li.tip::marker { content: "\25B8  "; color: var(--warn); }
+.subs { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; } .subs span { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: .9rem; } .subs b { margin-left: 6px; }
+.err { color: var(--bad); }
+#ep-text { width: 100%; min-height: 40vh; margin-top: 10px; line-height: 1.6; }
+#ep-sel { width: 100%; } #ep-prompt { white-space: pre-line; background: var(--bg); padding: 10px 14px; border-radius: 8px; margin: 10px 0; }

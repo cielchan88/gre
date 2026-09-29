@@ -2,12 +2,15 @@ import * as store from './store.js';
 import * as E from './engine.js';
 import { renderQuestion, applyPick, esc, correctAnswerText, responseText } from './ui-question.js';
 import { calc, press, calcHtml } from './ui-calc.js';
+import { estimateEssay } from './essay-score.js';
 import { DIFF_LABEL, TOPIC_LABEL, TYPE_LABEL } from './consts.js';
 
 let state = store.load();
 const app = document.getElementById('app');
 let tickId = null;
 let toast = '';
+let aiAvailable = false;
+fetch('/api/config').then((r) => r.json()).then((c) => { aiAvailable = !!c.ai; }).catch(() => {});
 
 const persist = () => store.save(state);
 const $ = (sel) => document.querySelector(sel);
@@ -22,7 +25,7 @@ const levelDots = (n) => '●'.repeat(n) + '○'.repeat(5 - n);
 // ───────────────────────── Layout ─────────────────────────
 function shell(inner, { plain = false } = {}) {
   const nav = `<header class="topbar"><a class="brand" href="#/">GRE<span>Practice Lab</span></a>
-    <nav><a href="#/">Dashboard</a><a href="#/mistakes">Kesalahan${Object.keys(state.missed).length ? ` <em>${Object.keys(state.missed).length}</em>` : ''}</a><a href="#/about">Panduan</a><a href="#/settings">Pengaturan</a></nav></header>`;
+    <nav><a href="#/">Dashboard</a><a href="#/essay">Esai</a><a href="#/mistakes">Kesalahan${Object.keys(state.missed).length ? ` <em>${Object.keys(state.missed).length}</em>` : ''}</a><a href="#/about">Panduan</a><a href="#/settings">Pengaturan</a></nav></header>`;
   return `${plain ? '' : nav}<main class="${plain ? 'test-main' : 'container'}">${inner}</main>${toast ? `<div class="toast">${esc(toast)}</div>` : ''}`;
 }
 function render(html, opts) {
@@ -40,6 +43,7 @@ function route() {
   if (page === 'start') return viewIntro(arg);
   if (page === 'session') return viewSession();
   if (page === 'result') return viewResult(arg);
+  if (page === 'essay') return viewEssay();
   if (page === 'mistakes') return viewMistakes();
   if (page === 'settings') return viewSettings();
   if (page === 'about') return viewAbout();
@@ -361,7 +365,7 @@ function viewResult(id) {
       <div class="grid2">${card('V')}${card('Q')}</div>
       <div class="card"><h3>Ringkasan per section</h3><table class="data"><tr><th>Section</th><th>Benar</th><th>Skor terbobot</th><th>Tingkat</th><th>Waktu</th></tr>${r.sections.map((s) => `<tr><td>${secName(s.section)} ${s.key.slice(1)}</td><td>${s.c}/${s.n}</td><td>${pct(s.p)}</td><td>${s.tier === 'router' ? 'routing' : s.tier}</td><td>${mmss(s.secs * 1000)}</td></tr>`).join('')}</table>
       <p class="muted">Skor adalah <b>estimasi</b> berdasarkan bobot kesulitan soal dan tingkat Section 2. Bukan skor resmi ETS; bank soal ini orisinal dan lebih kecil dari GRE asli.</p></div>
-      ${r.awa ? `<div class="card"><h3>Analytical Writing</h3><p>${r.awa.words} kata. Esai tidak dinilai otomatis. Periksa sendiri: posisi jelas? contoh konkret? mempertimbangkan sisi lain? struktur & tata bahasa?</p><details><summary>Lihat esai &amp; topik</summary><p class="pre">${esc(r.awa.prompt)}</p><hr><p class="pre">${esc(r.awa.text) || '<i>(kosong)</i>'}</p></details></div>` : ''}
+      ${r.awa ? `<div class="card"><h3>Analytical Writing</h3><p>${r.awa.words} kata. Esai tidak dinilai otomatis. Periksa sendiri: posisi jelas? contoh konkret? mempertimbangkan sisi lain? struktur & tata bahasa?</p><details><summary>Lihat esai &amp; topik</summary><p class="pre">${esc(r.awa.prompt)}</p><hr><p class="pre">${esc(r.awa.text) || '<i>(kosong)</i>'}</p></details>${essayPanel(r.id, r.awa)}</div>` : ''}
       <div class="card"><h3>Akurasi per topik</h3>${topicBars(r.topics)}</div>
       <div class="actions">${nk ? `<a class="btn primary" href="#/start/${nk}">Lanjut: ${itemTitle(planItem(nk))}</a>` : ''}<a class="btn" href="#/mistakes">Latihan ulang kesalahan</a></div>
       <h2>Pembahasan</h2>${reviewList(r.items)}`);
@@ -374,6 +378,57 @@ function viewResult(id) {
     <div class="card"><h3>Akurasi per topik</h3>${topicBars(r.topics)}</div>
     <div class="actions">${nk && r.kind === 'day' ? `<a class="btn primary" href="#/start/${nk}">Lanjut: ${itemTitle(planItem(nk))}</a>` : '<a class="btn primary" href="#/">Dashboard</a>'}</div>
     <h2>Pembahasan</h2>${reviewList(r.items)}`);
+}
+
+// ───────────────────────── Essay scoring ─────────────────────────
+const listHtml = (a) => (a?.length ? `<ul>${a.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
+function heurHtml(h) {
+  return `<div class="essay-fb"><div class="essay-score"><span>${h.score}</span><small>/ 6 &middot; estimasi otomatis (fitur permukaan saja)</small></div>
+    <ul class="fb-list">${h.feedback.map((f) => `<li class="${f.type}">${esc(f.text)}</li>`).join('')}</ul>
+    <p class="muted">${h.metrics.words} kata &middot; ${h.metrics.paragraphs} paragraf &middot; ${h.metrics.sentences} kalimat. Penilai otomatis ini tidak bisa menilai kebenaran logika argumen; untuk umpan balik isi, gunakan penilaian AI.</p></div>`;
+}
+function aiHtml(a) {
+  const sc = a.subscores;
+  return `<div class="essay-fb ai"><div class="essay-score"><span>${a.score}</span><small>/ 6 &middot; penilaian AI (rubrik GRE Issue task; bukan skor resmi ETS)</small></div>
+    <p>${esc(a.summary)}</p>
+    <div class="subs">${[['position', 'Posisi'], ['development', 'Pengembangan'], ['organization', 'Organisasi'], ['language', 'Bahasa']].map(([k, l]) => `<span>${l}<b>${sc[k]}</b></span>`).join('')}</div>
+    ${a.strengths.length ? `<h4>Kekuatan</h4>${listHtml(a.strengths)}` : ''}${a.improvements.length ? `<h4>Yang perlu diperbaiki</h4>${listHtml(a.improvements)}` : ''}
+    ${a.language_errors.length ? `<h4>Kesalahan bahasa</h4><ul>${a.language_errors.map((e) => `<li><s>${esc(e.quote)}</s> &rarr; <b>${esc(e.fix)}</b></li>`).join('')}</ul>` : ''}</div>`;
+}
+function essayPanel(rid, awa) {
+  return `<div class="essay-panel" id="essay-panel" data-rid="${rid || ''}"><div class="actions"><button class="btn" data-act="essayheur">Nilai cepat (offline)</button>
+    <button class="btn primary" data-act="essayai">Nilai dengan AI</button></div>
+    <p class="muted">Penilaian AI mengirim teks esai ke server ini lalu ke Anthropic API; hanya berfungsi jika admin sudah mengatur <code>ANTHROPIC_API_KEY</code>.</p>
+    <div id="essay-out">${awa?.heur ? heurHtml(awa.heur) : ''}${awa?.ai ? aiHtml(awa.ai) : ''}</div></div>`;
+}
+function essaySource() {
+  const rid = $('#essay-panel').dataset.rid;
+  if (rid) { const r = state.results.find((x) => x.id === rid); return { prompt: r.awa.prompt, text: r.awa.text, awa: r.awa }; }
+  return { prompt: E.AWA_PROMPTS[Number($('#ep-sel').value)], text: $('#ep-text').value, awa: null };
+}
+async function scoreEssayAction(kind) {
+  const src = essaySource(), out = $('#essay-out');
+  if (kind === 'heur') {
+    const h = estimateEssay(src.text);
+    if (src.awa) { src.awa.heur = h; persist(); }
+    out.innerHTML = heurHtml(h) + (src.awa?.ai ? aiHtml(src.awa.ai) : '');
+    return;
+  }
+  out.innerHTML = '<p class="muted">Menilai dengan AI\u2026 (10\u201330 detik)</p>';
+  try {
+    const res = await fetch('/api/score-essay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: src.prompt, essay: src.text }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Gagal');
+    if (src.awa) { src.awa.ai = data; persist(); }
+    out.innerHTML = aiHtml(data) + (src.awa?.heur ? heurHtml(src.awa.heur) : '');
+  } catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+function viewEssay() {
+  const d = state.essayDraft || { idx: 0, text: '' };
+  render(`<h1>Latihan esai (Analyze an Issue)</h1><div class="card awa"><label class="stack"><span><b>Pilih topik</b></span><select id="ep-sel">${E.AWA_PROMPTS.map((p, i) => `<option value="${i}" ${d.idx === i ? 'selected' : ''}>${i + 1}. ${esc(p.split('\n')[0].slice(0, 90))}\u2026</option>`).join('')}</select></label>
+    <div class="prompt" id="ep-prompt">${esc(E.AWA_PROMPTS[d.idx])}</div>
+    <textarea id="ep-text" placeholder="Type your response here (target: 350\u2013500 words)." spellcheck="false">${esc(d.text)}</textarea><div class="wc"><span id="ep-wc">${(d.text.trim().match(/\S+/g) || []).length} words</span></div>
+    ${essayPanel('', null)}</div>`);
 }
 
 // ───────────────────────── Mistakes / Settings / About ─────────────────────────
@@ -456,6 +511,8 @@ document.addEventListener('click', (e) => {
     calcclose: () => { calc.open = false; $('.calc')?.remove(); },
     calckey: () => { press(el.dataset.k); const d = $('#calc-disp'); if (d) d.textContent = calc.disp.replace('-', '−'); },
     calcxfer: () => { const box = document.querySelector('.ne-box'); if (box && !box.disabled) { box.value = calc.disp === 'Error' ? '' : calc.disp; box.dispatchEvent(new Event('input', { bubbles: true })); } },
+    essayheur: () => scoreEssayAction('heur'),
+    essayai: () => scoreEssayAction('ai'),
     filter: () => { document.querySelectorAll('[data-act=filter]').forEach((b) => b.classList.toggle('active', b === el)); $('#rvlist').dataset.filter = el.dataset.f; },
     export: () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([store.exportJSON(state)], { type: 'application/json' })); a.download = `gre-practice-${new Date().toISOString().slice(0, 10)}.json`; a.click(); },
     resetall: () => { if (confirm('Hapus SEMUA progres dan riwayat? Tindakan ini tidak bisa dibatalkan.')) { state = store.reset(); location.hash = '#/'; route(); } },
@@ -480,6 +537,10 @@ document.addEventListener('input', (e) => {
     persist();
     const s = state.session;
     if (s.kind !== 'mock') { const it = s.items[s.cursor]; const b = $('#checkbtn'); if (b) b.disabled = !E.isAnswered(it.q, it.resp); }
+  } else if (t.id === 'ep-text') {
+    state.essayDraft = { ...(state.essayDraft || { idx: 0 }), text: t.value };
+    $('#ep-wc').textContent = `${(t.value.trim().match(/\S+/g) || []).length} words`;
+    clearTimeout(viewSession._t); viewSession._t = setTimeout(persist, 600);
   } else if (t.id === 'essay') {
     M().awa.text = t.value;
     $('#wc').textContent = `${(t.value.trim().match(/\S+/g) || []).length} words`;
@@ -488,6 +549,7 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+  if (e.target.id === 'ep-sel') { const i = Number(e.target.value); state.essayDraft = { ...(state.essayDraft || { text: '' }), idx: i }; persist(); $('#ep-prompt').textContent = E.AWA_PROMPTS[i]; }
   if (e.target.id === 'import') {
     const f = e.target.files[0];
     if (!f) return;

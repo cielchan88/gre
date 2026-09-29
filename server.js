@@ -4,10 +4,41 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { gradeWithClaude, validateInput } from './lib/essay-ai.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const PORT = Number(process.env.PORT) || 8888;
 const HOST = process.env.HOST || '0.0.0.0';
+const API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
+const BASE_URL = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+const RATE_LIMIT = Number(process.env.ESSAY_RATE_PER_HOUR) || 20;
+const hits = new Map(); // ip -> timestamps (simple in-memory limiter to cap API spend)
+
+const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+function rateLimited(ip) {
+  const now = Date.now(), arr = (hits.get(ip) || []).filter((t) => now - t < 3600e3);
+  arr.push(now); hits.set(ip, arr);
+  return arr.length > RATE_LIMIT;
+}
+function readBody(req, limit = 40000) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', (c) => { size += c.length; if (size > limit) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+async function scoreEssay(req, res) {
+  if (!API_KEY) return json(res, 503, { error: 'Penilaian AI belum dikonfigurasi (ANTHROPIC_API_KEY belum diset di server).' });
+  if (rateLimited(req.socket.remoteAddress)) return json(res, 429, { error: 'Batas penilaian per jam tercapai. Coba lagi nanti.' });
+  let body;
+  try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'Permintaan tidak valid' }); }
+  const bad = validateInput(body);
+  if (bad) return json(res, 400, { error: bad });
+  try { json(res, 200, await gradeWithClaude(body, { apiKey: API_KEY, model: MODEL, baseUrl: BASE_URL })); }
+  catch (e) { console.error('essay grading failed:', e.message); json(res, 502, { error: 'Layanan penilaian AI gagal. Coba lagi.' }); }
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -30,6 +61,8 @@ const SECURITY_HEADERS = {
 };
 
 const server = http.createServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/api/score-essay') return scoreEssay(req, res);
+  if (req.method === 'GET' && req.url === '/api/config') return json(res, 200, { ai: !!API_KEY });
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' });
     return res.end();

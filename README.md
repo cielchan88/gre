@@ -14,7 +14,7 @@ npm test             # validasi bank soal, generator, logika adaptif & skor
 **Opsi A – systemd**
 ```bash
 sudo apt install -y nodejs           # Node >= 18
-sudo mkdir -p /opt/gre && sudo cp -r server.js package.json public /opt/gre/
+sudo mkdir -p /opt/gre && sudo cp -r server.js package.json lib public /opt/gre/
 sudo cp deploy/gre-practice.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now gre-practice
 sudo ufw allow 8888/tcp              # bila memakai ufw
@@ -23,6 +23,14 @@ curl http://localhost:8888/healthz   # -> ok
 **Opsi B – Docker**: `docker compose up -d --build`
 
 Untuk HTTPS/domain, letakkan reverse proxy (Caddy/nginx) di depan `127.0.0.1:8888`.
+
+## Penilaian esai
+- **Offline (selalu aktif):** estimasi 0–6 dari fitur permukaan (panjang, paragraf, contoh, sisi lain, transisi, variasi bahasa). Tidak bisa menilai kualitas logika.
+- **AI (opsional):** rubrik GRE Issue task via Claude, dengan skor, subskor, kekuatan, perbaikan, dan kesalahan bahasa. Aktifkan dengan env di server:
+  `ANTHROPIC_API_KEY=sk-ant-...` (opsional `ANTHROPIC_MODEL`, `ESSAY_RATE_PER_HOUR` default 20 per IP). Untuk systemd tambahkan `Environment=ANTHROPIC_API_KEY=...` (atau `EnvironmentFile=`); untuk Docker `-e ANTHROPIC_API_KEY`.
+  Esai dikirim ke server ini lalu ke Anthropic API; setiap penilaian berbiaya kecil. Tanpa key, tombol AI menampilkan pesan bahwa layanan belum dikonfigurasi.
+- Dipakai di hasil mock test dan di halaman **Esai** (latihan bebas dengan 6 topik).
+- Skor bukan skor resmi ETS (yang memakai e-rater + penilai manusia).
 
 ## Cara kerja
 - **Adaptif (modul harian):** level kemampuan (skala 1–5) diperbarui tiap soal dengan model Elo; benar → soal berikutnya lebih sulit, salah → lebih mudah. Soal yang pernah salah muncul lagi lebih cepat.
@@ -34,4 +42,4 @@ Untuk HTTPS/domain, letakkan reverse proxy (Caddy/nginx) di depan `127.0.0.1:888
 - Soal orisinal, bukan soal ETS. Quant dihasilkan parametrik (33 generator + 43 soal manual); Verbal ditulis manual (~100 soal, 10 passage) sehingga akan berulang di siklus akhir. Tambahkan soal di `public/js/bank-verbal.js`.
 - Skor & persentil hanyalah estimasi kasar; kalibrasi belum diuji pada peserta nyata.
 - Kunci jawaban ada di kode klien (cocok untuk latihan pribadi, bukan ujian yang diawasi).
-- Penulisan esai tidak dinilai otomatis.
+- Penilai esai offline hanya heuristik; penilai AI bisa keliru dan cenderung tidak konsisten antar-percobaan.
