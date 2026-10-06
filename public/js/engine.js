@@ -5,6 +5,8 @@ import { QUANT_STATIC } from './bank-quant.js';
 import { GENERATORS, generate, generateDISet } from './gen-quant.js';
 import { makeRng, clamp } from './util.js';
 import { Q_TOPICS } from './consts.js';
+import { generateVocabQuestion, wordsForDay } from './vocab.js';
+import { percentile } from './scores.js';
 
 export { PASSAGES };
 export const STATIC_QUESTIONS = [...VERBAL, ...QUANT_STATIC];
@@ -89,8 +91,8 @@ export function isPartial(q, resp) {
 }
 
 // ───────────────────────── Selection ─────────────────────────
-const seenPenalty = (seen, id) => {
-  const s = seen?.[id];
+const seenPenalty = (seen, key) => {
+  const s = seen?.[key];
   if (!s) return 0;
   // Previously missed questions come back sooner than ones answered correctly.
   return 1.6 + 0.5 * (s.n - 1) - (s.ok === false ? 1.3 : 0);
@@ -100,7 +102,7 @@ function pickStatic(pool, target, ctx, bonus = 0) {
   let best = null;
   for (const q of pool) {
     if (ctx.used.has(q.id)) continue;
-    const cost = Math.abs(q.difficulty - target) + seenPenalty(ctx.seen, q.id) + ctx.rng.f() * 0.5 + bonus - (ctx.topic && q.topic === ctx.topic ? 0.7 : 0);
+    const cost = Math.abs(q.difficulty - target) + seenPenalty(ctx.seen, q.seenKey || q.id) + ctx.rng.f() * 0.5 + bonus - (ctx.topic && q.topic === ctx.topic ? 0.7 : 0);
     if (!best || cost < best.cost) best = { q, cost };
   }
   return best;
@@ -112,6 +114,18 @@ export function pickQuestion(section, type, target, ctx) {
     const pool = VERBAL.filter((q) => q.type === type);
     let best = pickStatic(pool, target, ctx);
     if (!best) best = pickStatic(pool, target, { ...ctx, used: new Set() });
+    // Vocabulary-generated items compete with the hand-written bank; they win once the bank's
+    // well-matched items have been seen, and when they practise today's words.
+    if (type === 'tc' || type === 'se') {
+      const day = new Set(ctx.dayWords || []);
+      for (let i = 0; i < 3; i++) {
+        const q = generateVocabQuestion(type, ctx.rng, { prefer: ctx.dayWords, target });
+        if (ctx.used.has(q.seenKey)) continue;
+        const cost = Math.abs(q.difficulty - target) + seenPenalty(ctx.seen, q.seenKey) + ctx.rng.f() * 0.5 + 0.35 - (q.vocab.some((w) => day.has(w)) ? 0.45 : 0);
+        if (!best || cost < best.cost) best = { q, cost };
+      }
+      if (best.q.seenKey) ctx.used.add(best.q.seenKey);
+    }
     return best.q;
   }
   const pool = QUANT_STATIC.filter((q) => q.type === type);
@@ -140,7 +154,7 @@ export function pickPassage(target, take, ctx) {
   for (const [pid, qs] of Object.entries(passageGroups)) {
     if (qs.every((q) => ctx.used.has(q.id))) continue;
     const mean = qs.reduce((s, q) => s + q.difficulty, 0) / qs.length;
-    const pen = qs.reduce((s, q) => s + seenPenalty(ctx.seen, q.id), 0) / qs.length;
+    const pen = qs.reduce((s, q) => s + seenPenalty(ctx.seen, q.seenKey || q.id), 0) / qs.length;
     const cost = Math.abs(mean - target) + pen + ctx.rng.f() * 0.5;
     if (!best || cost < best.cost) best = { pid, qs, cost };
   }
@@ -174,7 +188,7 @@ export function createPractice(state, planItem, now = Date.now()) {
       V: r.shuffle(['tc', 'tc', 'tc', 'se', 'se', 'se', 'rc', 'rc']),
       Q: r.shuffle(['qc', 'qc', 'qc', 'mc1', 'mc1', 'mcn', 'ne', 'ne', 'di']),
     },
-    slot: { V: 0, Q: 0 }, queue: [], genUse: {},
+    slot: { V: 0, Q: 0 }, queue: [], genUse: {}, dayWords: wordsForDay(planItem.day).map((w) => w.word),
     thetaStart: { ...state.theta }, theta: { ...state.theta },
     items: [], cursor: 0, finished: false,
   };
@@ -190,8 +204,8 @@ export function nextPracticeItem(session, state) {
     const section = count('V') < PRACTICE_SIZE.V ? 'V' : count('Q') < PRACTICE_SIZE.Q ? 'Q' : null;
     if (!section) return null;
     const rng = makeRng(session.seed + session.items.length * 7919);
-    const used = new Set(session.items.map((it) => it.q.id));
-    const ctx = { rng, seen: state.seen, used, topic: section === 'Q' ? session.topic : null, genUse: session.genUse };
+    const used = new Set(session.items.flatMap((it) => [it.q.id, it.q.seenKey].filter(Boolean)));
+    const ctx = { rng, seen: state.seen, used, topic: section === 'Q' ? session.topic : null, genUse: session.genUse, dayWords: session.dayWords };
     const target = clamp(session.theta[section] + 0.2, 1, 5);
     const slot = session.plan[section][session.slot[section]++] ?? (section === 'V' ? 'tc' : 'mc1'); // top-up if a passage yielded fewer questions
     if (slot === 'rc' || slot === 'di') {
@@ -306,7 +320,7 @@ export function buildMockSection(def, tier, state, session, seedOffset = 0) {
       items.push({ q, resp: null, marked: false, visited: false, ms: 0, group: grp.length > 1 || q.passage || q.data ? { from, to: Math.min(to, def.n) } : null });
     }
   }
-  items.forEach((it) => session.used.push(it.q.id));
+  items.forEach((it) => session.used.push(it.q.id, ...(it.q.seenKey ? [it.q.seenKey] : [])));
   return items;
 }
 
@@ -338,15 +352,8 @@ export function scaledScore(p1, p2, tier) {
 }
 
 // Rough, unofficial percentile anchors (interpolated) for orientation only.
-const PCT = { V: [[130, 0], [135, 1], [140, 8], [145, 25], [150, 46], [155, 68], [160, 86], [165, 96], [170, 99]], Q: [[130, 0], [135, 2], [140, 9], [145, 21], [150, 38], [155, 56], [160, 73], [165, 87], [170, 97]] };
-export function approxPercentile(section, score) {
-  const t = PCT[section];
-  for (let i = 1; i < t.length; i++) if (score <= t[i][0]) {
-    const [a, pa] = t[i - 1], [b, pb] = t[i];
-    return Math.round(pa + ((score - a) / (b - a)) * (pb - pa));
-  }
-  return 99;
-}
+/** Official ETS percentile rank (kept under the old name for callers). */
+export const approxPercentile = (section, score) => percentile(section, score);
 
 /** Called when both sections of a subject have been completed. */
 export function mockScores(session) {

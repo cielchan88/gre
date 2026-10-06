@@ -4,11 +4,12 @@ import * as E from '../public/js/engine.js';
 import { generateDISet } from '../public/js/gen-quant.js';
 import { calc, press } from '../public/js/ui-calc.js';
 
-test('data interpretation sets: 4 well-formed questions sharing one display, up to difficulty 5', () => {
+test('data interpretation sets: 5 well-formed questions sharing one display, difficulty 1 to 5', () => {
   for (let s = 1; s <= 500; s++) {
     const qs = generateDISet(s);
-    assert.equal(qs.length, 4);
+    assert.equal(qs.length, 5);
     assert.equal(Math.max(...qs.map((q) => q.difficulty)), 5);
+    assert.equal(Math.min(...qs.map((q) => q.difficulty)), 1);
     assert.equal(new Set(qs.map((q) => q.data)).size, 1);
     for (const q of qs) {
       assert.equal(q.section, 'Q');

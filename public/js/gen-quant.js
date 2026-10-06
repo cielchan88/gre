@@ -610,6 +610,10 @@ const DI_KINDS = {
     const v1 = names.map(() => 20 * r.int(6, 20)), v2 = v1.map((v, i) => Math.round(v * mult[i]));
     const html = `<table class="data"><caption>${unit}, ${y1} and ${y2}</caption><tr><th></th><th>${y1}</th><th>${y2}</th></tr>${names.map((n, i) => `<tr><th>${n}</th><td>${v1[i]}</td><td>${v2[i]}</td></tr>`).join('')}<tr><th>Total</th><td>${v1.reduce((a, b) => a + b)}</td><td>${v2.reduce((a, b) => a + b)}</td></tr></table>`;
     const qs = [];
+    const k0 = r.int(0, 4);
+    const c0 = numChoices(r, v1[k0], [...v1, ...v2, v1[k0] + 20, v1[k0] - 20]);
+    qs.push({ type: 'mc1', difficulty: 1, stem: `What was the figure for ${names[k0]} in ${y1}?`, options: c0.options, answer: c0.answer,
+      explain: `Read the ${names[k0]} row in the ${y1} column: ${v1[k0]}. Check the row and the column before answering \u2014 most data-reading errors come from the wrong year.` });
     const best = mult.indexOf(Math.max(...mult));
     qs.push({ type: 'mc1', difficulty: 3, stem: `Which of the five had the greatest percent increase from ${y1} to ${y2}?`, options: names, answer: best,
       explain: `Percent change = (${y2} − ${y1}) / ${y1}. ${names.map((n, i) => `${n}: ${fmt(+((mult[i] - 1) * 100).toFixed(1))}%`).join('; ')}. The greatest is ${names[best]}. A larger absolute increase is not necessarily a larger percent increase.` });
@@ -635,9 +639,13 @@ const DI_KINDS = {
     do {
       a = MONTHS.map(() => 10 * r.int(2, 13)); b = MONTHS.map(() => 10 * r.int(2, 13));
       diffs = a.map((v, i) => Math.abs(v - b[i]));
-    } while (diffs.filter((d) => d === Math.max(...diffs)).length > 1 || a[0] === a[5]);
+    } while (diffs.filter((d) => d === Math.max(...diffs)).length > 1 || a[0] === a[5] || a.filter((v) => v === Math.max(...a)).length > 1);
     const html = barChart(what, a, b, la, lb);
     const qs = [];
+    const top = a.indexOf(Math.max(...a));
+    const m0 = r.shuffle(MONTHS.filter((_, i) => i !== top)).slice(0, 4).concat(MONTHS[top]).sort((x, y) => MONTHS.indexOf(x) - MONTHS.indexOf(y));
+    qs.push({ type: 'mc1', difficulty: 1, stem: `In which month was ${la}'s figure the highest?`, options: m0, answer: m0.indexOf(MONTHS[top]),
+      explain: `${la}'s tallest bar is in ${MONTHS[top]} (${a[top]}).` });
     const best = diffs.indexOf(Math.max(...diffs));
     const months = r.shuffle(MONTHS.filter((_, i) => i !== best)).slice(0, 4).concat(MONTHS[best]).sort((x, y) => MONTHS.indexOf(x) - MONTHS.indexOf(y));
     qs.push({ type: 'mc1', difficulty: 2, stem: `In which month was the difference between ${la} and ${lb} the greatest?`, options: months, answer: months.indexOf(MONTHS[best]),
@@ -658,14 +666,17 @@ const DI_KINDS = {
     return { title: 'Graph', html, qs };
   },
   pie(r) {
-    const cats = ['Salaries', 'Research', 'Marketing', 'Facilities', 'Other'];
+    const cats = r.shuffle(['Salaries', 'Research', 'Marketing', 'Facilities', 'Equipment']);
     let pcts;
     do { const cuts = r.shuffle([...Array(19).keys()].map((i) => (i + 1) * 5)).slice(0, 4).sort((x, y) => x - y); pcts = [cuts[0], cuts[1] - cuts[0], cuts[2] - cuts[1], cuts[3] - cuts[2], 100 - cuts[3]]; }
-    while (pcts.some((p) => p < 5) || new Set(pcts).size < 4);
+    while (pcts.some((p) => p < 5) || new Set(pcts).size < 4 || pcts.filter((p) => p === Math.max(...pcts)).length > 1);
     pcts.sort((x, y) => y - x);
     const T = r.pick([40, 60, 80, 120, 200]);
     const html = pieChart(`Distribution of a company's annual budget of $${T} million`, cats, pcts);
     const qs = [];
+    const alpha = [...cats].sort();
+    qs.push({ type: 'mc1', difficulty: 1, stem: 'Which category received the largest share of the budget?', options: alpha, answer: alpha.indexOf(cats[0]),
+      explain: `${cats[0]} has the largest slice (${pcts[0]}%).` });
     const i = r.int(0, 4), amt = (T * pcts[i]) / 100;
     const c = numChoices(r, amt, [pcts[i], (T * pcts[i]) / 10, (T * (pcts[i] + 5)) / 100, (T * (pcts[i] - 5)) / 100, T - amt]);
     qs.push({ type: 'mc1', difficulty: 2, stem: `How much of the budget, in millions of dollars, was allocated to ${cats[i]}?`, options: c.options, answer: c.answer,
@@ -694,7 +705,7 @@ const DI_KINDS = {
   },
 };
 
-/** Generate a Data Interpretation set: 4 questions (difficulty 2-5) sharing one table/graph; tests use 2-3 of them. */
+/** Generate a Data Interpretation set: 5 questions (difficulty 1-5) sharing one table/graph; a test uses the 2-3 nearest the student's level. */
 export function generateDISet(seed) {
   const r = makeRng(seed);
   const kind = r.pick(Object.keys(DI_KINDS));

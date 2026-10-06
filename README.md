@@ -32,6 +32,10 @@ Untuk HTTPS/domain, letakkan reverse proxy (Caddy/nginx) di depan `127.0.0.1:888
 - Dipakai di hasil mock test dan di halaman **Esai** (latihan bebas dengan 6 topik).
 - Skor bukan skor resmi ETS (yang memakai e-rater + penilai manusia).
 
+## Kosakata & interpretasi skor
+- **Bank kosakata:** 247 kata GRE dalam 77 kelompok sinonim (definisi Inggris + arti Indonesia, sinonim, antonim, contoh kalimat). Dipakai untuk: 8 kata per hari di modul harian, review kartu (Leitner 1/3/7/14/30 hari), dan soal Text Completion / Sentence Equivalence yang dibangkitkan otomatis (pasangan sinonim jebakan diambil dari kelompok lain).
+- **Skor:** persentil memakai tabel resmi ETS (*GRE Guide to the Use of Scores*, data Juli 2022–Juni 2025), termasuk rata-rata per bidang studi dan SEM. Target skor / bidang studi bisa diatur di Pengaturan.
+
 ## Cara kerja
 - **Adaptif (modul harian):** level kemampuan (skala 1–5) diperbarui tiap soal dengan model Elo; benar → soal berikutnya lebih sulit, salah → lebih mudah. Soal yang pernah salah muncul lagi lebih cepat.
 - **Adaptif (mock):** Section 1 menengah; skor terbobot kesulitan menentukan Section 2 (mudah/menengah/sulit) dan batas atas skor, seperti GRE asli.
@@ -42,7 +46,7 @@ Untuk HTTPS/domain, letakkan reverse proxy (Caddy/nginx) di depan `127.0.0.1:888
 - **Progres:** disimpan di `localStorage` browser (per browser/perangkat); ada ekspor/impor JSON di Pengaturan.
 
 ## Batasan
-- Soal orisinal, bukan soal ETS. Quant dihasilkan parametrik (33 generator + 43 soal manual); Verbal ditulis manual (~100 soal, 10 passage) sehingga akan berulang di siklus akhir. Tambahkan soal di `public/js/bank-verbal.js`.
+- Soal orisinal, bukan soal ETS. Quant dihasilkan parametrik (33 generator + 43 soal manual); Verbal: ~100 soal manual + soal TC/SE dari bank kosakata; passage RC masih 10 sehingga akan berulang. Tambahkan soal di `public/js/bank-verbal.js` dan kata di `public/js/vocab.js`.
 - Skor & persentil hanyalah estimasi kasar; kalibrasi belum diuji pada peserta nyata.
 - Kunci jawaban ada di kode klien (cocok untuk latihan pribadi, bukan ujian yang diawasi).
 - Penilai esai offline hanya heuristik; penilai AI bisa keliru dan cenderung tidak konsisten antar-percobaan.

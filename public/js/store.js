@@ -7,6 +7,7 @@ export const defaultState = () => ({
   settings: { timeScale: 1, sequential: true, showLevel: true },
   theta: { V: 3, Q: 3 },
   progress: {}, results: [], seen: {}, missed: {}, session: null,
+  vocab: {}, target: { field: '', V: null, Q: null },
 });
 
 let mem = null;
@@ -19,7 +20,7 @@ export function load() {
 }
 export function migrate(s) {
   const d = defaultState();
-  return { ...d, ...s, settings: { ...d.settings, ...(s.settings || {}) }, theta: { ...d.theta, ...(s.theta || {}) } };
+  return { ...d, ...s, settings: { ...d.settings, ...(s.settings || {}) }, theta: { ...d.theta, ...(s.theta || {}) }, target: { ...d.target, ...(s.target || {}) }, vocab: s.vocab || {} };
 }
 export function save(state) {
   const raw = JSON.stringify(state);
@@ -39,10 +40,23 @@ export function addResult(state, result) {
   if (state.results.length > 100) state.results.length = 100;
 }
 
+// Leitner spaced repetition for vocabulary: box 1..5, next review after SRS_DAYS[box] days.
+export const SRS_DAYS = [0, 1, 3, 7, 14, 30];
+export function srsGrade(state, word, ok, now = Date.now()) {
+  const v = state.vocab[word] || { box: 0, n: 0 };
+  const box = ok ? Math.min(5, v.box + 1) : 1;
+  state.vocab[word] = { box, n: v.n + 1, ok, due: now + (ok ? SRS_DAYS[box] : 0) * 864e5 };
+}
+
 /** Update spaced-repetition memory and the missed-question list. */
 export function recordSeen(state, q, correct, now = Date.now()) {
-  const s = state.seen[q.id] || { n: 0 };
-  state.seen[q.id] = { n: s.n + 1, ok: correct, ts: now };
+  const key = q.seenKey || q.id;
+  const s = state.seen[key] || { n: 0 };
+  state.seen[key] = { n: s.n + 1, ok: correct, ts: now };
+  if (q.vocab) for (const w of q.vocab) {
+    if (!correct) srsGrade(state, w, false, now);
+    else if (!state.vocab[w]) state.vocab[w] = { box: 1, n: 1, ok: true, due: now + 864e5 };
+  }
   if (correct) delete state.missed[q.id];
   else {
     state.missed[q.id] = { q, ts: now };

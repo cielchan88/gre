@@ -3,6 +3,8 @@ import * as E from './engine.js';
 import { renderQuestion, applyPick, esc, correctAnswerText, responseText, typeLabel, instructions } from './ui-question.js';
 import { calc, press, calcHtml, display as calcDisplay } from './ui-calc.js';
 import { estimateEssay } from './essay-score.js';
+import * as SC from './scores.js';
+import * as VOC from './vocab.js';
 import { DIFF_LABEL, TOPIC_LABEL, TYPE_LABEL } from './consts.js';
 
 let state = store.load();
@@ -25,7 +27,7 @@ const levelDots = (n) => '●'.repeat(n) + '○'.repeat(5 - n);
 // ───────────────────────── Layout ─────────────────────────
 function shell(inner, { plain = false } = {}) {
   const nav = `<header class="topbar"><a class="brand" href="#/">GRE<span>Practice Lab</span></a>
-    <nav><a href="#/">Dashboard</a><a href="#/essay">Esai</a><a href="#/mistakes">Kesalahan${Object.keys(state.missed).length ? ` <em>${Object.keys(state.missed).length}</em>` : ''}</a><a href="#/about">Panduan</a><a href="#/settings">Pengaturan</a></nav></header>`;
+    <nav><a href="#/">Dashboard</a><a href="#/vocab">Kosakata</a><a href="#/essay">Esai</a><a href="#/mistakes">Kesalahan${Object.keys(state.missed).length ? ` <em>${Object.keys(state.missed).length}</em>` : ''}</a><a href="#/about">Panduan</a><a href="#/settings">Pengaturan</a></nav></header>`;
   return `${plain ? '' : nav}<main class="${plain ? 'test-main' : 'container'}">${inner}</main>${toast ? `<div class="toast">${esc(toast)}</div>` : ''}`;
 }
 function render(html, opts) {
@@ -44,6 +46,7 @@ function route() {
   if (page === 'session') return viewSession();
   if (page === 'result') return viewResult(arg);
   if (page === 'essay') return viewEssay();
+  if (page === 'vocab') { if (arg !== 'review') vr = null; return viewVocab(arg); }
   if (page === 'mistakes') return viewMistakes();
   if (page === 'settings') return viewSettings();
   if (page === 'about') return viewAbout();
@@ -60,13 +63,43 @@ function isUnlocked(key) {
 }
 const nextKey = () => (E.PLAN.find((p) => !isDone(p.key)) || {}).key;
 
+const currentDay = () => (E.PLAN.find((p) => p.kind === 'day' && !isDone(p.key)) || { day: 30 }).day;
+const targetFor = (sec) => Number(state.target[sec]) || SC.FIELD_BY_ID[state.target.field]?.[sec] || null;
+const pill = (st) => `<span class="pill ${st.tone}">${st.label}</span>`;
+
 function abilityCard(sec) {
   const t = state.theta[sec], score = E.thetaToScore(t);
+  const p = SC.percentile(sec, score);
   const last = state.results.find((r) => r.kind === 'mock' && r.scores?.[sec]);
+  const tgt = targetFor(sec);
   return `<div class="card ability"><h3>${secName(sec)}</h3>
-    <div class="score">${score}<small>estimasi</small></div>
-    <div class="meter" title="Level ${t.toFixed(1)}/5"><i style="width:${((t - 1) / 4) * 100}%"></i></div>
-    <p class="muted">Level adaptif ${t.toFixed(1)} / 5${last ? ` &middot; mock terakhir: <b>${last.scores[sec].score}</b>` : ' &middot; belum ada mock test'}</p></div>`;
+    <div class="score">${score}<small>estimasi${state.results.some((r) => r.kind !== 'review') ? ` &middot; persentil ${p}` : ''}</small></div>
+    <div class="meter" title="Level ${t.toFixed(1)}/5"><i style="width:${((t - 1) / 4) * 100}%"></i>${tgt ? `<b class="tgt" style="left:${((tgt - 130) / 40) * 100}%" title="Target ${tgt}"></b>` : ''}</div>
+    <p class="muted">${state.results.some((r) => r.kind !== 'review') ? pill(SC.standing(p)) : '<span class="pill ok">belum ada data</span>'} Level adaptif ${t.toFixed(1)} / 5${last ? ` &middot; mock terakhir: <b>${last.scores[sec].score}</b>` : ''}${tgt ? ` &middot; target <b>${tgt}</b>${score >= tgt ? ' \u2714' : ` (kurang ${tgt - score})`}` : ''}</p></div>`;
+}
+
+// ── Vocabulary helpers ──
+const POS = { adj: 'adjective', noun: 'noun', verb: 'verb' };
+function wordCard(w) {
+  const syn = VOC.synonymsOf(w), ant = VOC.antonymsOf(w), v = state.vocab[w.word];
+  return `<div class="word" data-w="${w.word}"><div class="w-head"><b class="w">${w.word}</b><span class="pos">${POS[w.pos]}</span><span class="tier" title="Tingkat kesulitan ${w.tier}/5">${'\u25CF'.repeat(w.tier)}${'\u25CB'.repeat(5 - w.tier)}</span>${v ? `<span class="box b${v.box}" title="Kotak Leitner">${v.box >= 4 ? 'dikuasai' : 'kotak ' + v.box}</span>` : ''}</div>
+    <div class="w-def">${esc(w.meaning)} &middot; <i>${esc(w.idn)}</i></div>
+    ${syn.length ? `<div class="w-rel">Sinonim: ${syn.join(', ')}</div>` : ''}${ant.length ? `<div class="w-rel">Antonim: ${ant.join(', ')}</div>` : ''}
+    <div class="w-ex">${VOC.exampleFor(w)}</div></div>`;
+}
+function vocabDeck(now = Date.now()) {
+  const intro = new Set();
+  for (let d = 1; d <= currentDay(); d++) VOC.wordsForDay(d).forEach((w) => intro.add(w.word));
+  Object.keys(state.vocab).forEach((w) => intro.add(w));
+  const due = [], fresh = [];
+  for (const w of intro) { const v = state.vocab[w]; if (!v) fresh.push(w); else if (v.due <= now) due.push(w); }
+  return { intro: intro.size, due, fresh, mastered: Object.values(state.vocab).filter((v) => v.box >= 4).length };
+}
+function vocabCard() {
+  const d = vocabDeck(), todo = d.due.length + Math.min(10, d.fresh.length);
+  return `<div class="card vocab-card"><div><h3>Kosakata GRE</h3><p class="muted">${d.mastered} dikuasai &middot; ${d.intro} sudah diperkenalkan &middot; ${VOC.WORDS.length} total</p>
+    <div class="meter"><i style="width:${(d.mastered / VOC.WORDS.length) * 100}%"></i></div></div>
+    <div class="actions">${todo ? `<a class="btn primary" href="#/vocab/review">Review ${todo} kata</a>` : '<span class="muted">Tidak ada kata jatuh tempo hari ini \u2714</span>'}<a class="btn" href="#/vocab">Kosakata hari ini</a></div></div>`;
 }
 
 function viewDashboard() {
@@ -91,6 +124,8 @@ function viewDashboard() {
   const recent = state.results.filter((r) => r.kind !== 'review').slice(0, 5).map((r) => `<li><a href="#/result/${r.id}"><b>${r.kind === 'mock' ? `Mock Test ${r.mock}` : `Day ${r.day}`}</b> <span class="muted">${dateStr(r.date)}</span><span class="grow"></span>${r.kind === 'mock' ? `V ${r.scores.V?.score ?? '–'} &middot; Q ${r.scores.Q?.score ?? '–'}` : `${r.correct}/${r.total} benar`}</a></li>`).join('');
   render(`<h1 class="hello">${state.name ? `Halo, ${esc(state.name)}` : 'Halo'} \uD83D\uDC4B</h1>${welcome}${resume}${next}
     <div class="grid2">${abilityCard('V')}${abilityCard('Q')}</div>
+    ${!state.target.field && !state.target.V ? '<p class="muted">Tip: atur <a href="#/settings">target skor / bidang studi</a> agar kemajuanmu dibandingkan dengan rata-rata pendaftar bidang tersebut (data ETS).</p>' : ''}
+    ${vocabCard()}
     <section><div class="section-head"><h2>Jalur latihan</h2><span class="muted">${done} dari ${E.PLAN.length} selesai</span></div>${roadmap}</section>
     ${recent ? `<section><h2>Hasil terbaru</h2><ul class="list">${recent}</ul></section>` : ''}`);
 }
@@ -106,9 +141,12 @@ function viewIntro(key) {
       <li><b>Fokus Quant hari ini:</b> ${TOPIC_LABEL[p.topic]}.</li>
       <li><b>Adaptif per soal:</b> jawaban benar &rarr; soal berikutnya lebih sulit; salah &rarr; lebih mudah. Level kamu terlihat di layar.</li>
       <li>Setelah tiap soal kamu langsung melihat benar/salah dan pembahasan. Kalkulator tersedia di bagian Quant.</li>
-      <li>Soal yang pernah salah akan muncul kembali lebih cepat.</li></ul>
+      <li>Soal yang pernah salah akan muncul kembali lebih cepat.</li>
+      <li><b>Kosakata hari ini</b> (di bawah) dipakai dalam sebagian soal Verbal.</li></ul>
       ${prog?.done ? `<p class="muted">Sudah selesai (${pct(prog.pct)}). Mengulang akan memberi soal baru dan memperbarui skor terakhir.</p>` : ''}
-      <button class="btn primary big" data-act="startday" data-key="${key}">${prog?.done ? 'Ulangi modul' : 'Mulai Day ' + p.day}</button></div>`);
+      <button class="btn primary big" data-act="startday" data-key="${key}">${prog?.done ? 'Ulangi modul' : 'Mulai Day ' + p.day}</button></div>
+      <div class="card"><h3>Kosakata hari ini</h3><p class="muted">Pelajari dulu ${VOC.WORDS_PER_DAY} kata ini: beberapa soal Text Completion &amp; Sentence Equivalence hari ini dibuat dari kata-kata tersebut. Kata yang salah otomatis masuk ke review kosakata.</p>
+      <div class="words">${VOC.wordsForDay(p.day).map(wordCard).join('')}</div></div>`);
     return;
   }
   const rows = E.MOCK_SECTIONS.filter((s) => s.role === 'router').map((s) => `<tr><td>${secName(s.section)}</td><td>2 section: 12 + 15 soal</td><td>${s.minutes} + ${E.MOCK_SECTIONS.find((x) => x.from === s.key).minutes} menit</td></tr>`).join('');
@@ -485,7 +523,15 @@ function viewResult(id) {
   if (!r) { location.hash = '#/'; return; }
   const nk = nextKey();
   if (r.kind === 'mock') {
-    const card = (sec) => { const sc = r.scores[sec]; return sc ? `<div class="card ability"><h3>${secName(sec)}</h3><div class="score big">${sc.score}<small>130–170 &middot; perkiraan</small></div><p class="muted">Section 2: level <b>${sc.tier}</b> &middot; perkiraan persentil kasar ~${E.approxPercentile(sec, sc.score)}%</p></div>` : ''; };
+    const field = SC.FIELD_BY_ID[state.target.field];
+    const card = (sec) => {
+      const sc = r.scores[sec];
+      if (!sc) return '';
+      const p = SC.percentile(sec, sc.score), [lo, hi] = SC.scoreBand(sec, sc.score), tgt = targetFor(sec);
+      return `<div class="card ability"><h3>${secName(sec)}</h3><div class="score big">${sc.score}<small>130\u2013170 &middot; perkiraan</small></div>
+        <p>${pill(SC.standing(p))} Persentil <b>${p}</b> <span class="muted">(tabel resmi ETS)</span></p>
+        <p class="muted">Rentang wajar \u00B1SEM: ${lo}\u2013${hi} &middot; Section 2: level <b>${sc.tier}</b>${field ? ` &middot; rata-rata pendaftar ${esc(field.name.split(' (')[0])}: <b>${field[sec]}</b>` : ''}${tgt ? ` &middot; target kamu <b>${tgt}</b>${sc.score >= tgt ? ' \u2714' : ` (kurang ${tgt - sc.score})`}` : ''}</p></div>`;
+    };
     render(`<a class="back" href="#/">&larr; Dashboard</a><h1>Mock Test ${r.mock} &mdash; Hasil</h1>
       <div class="grid2">${card('V')}${card('Q')}</div>
       <div class="card"><h3>Ringkasan per section</h3><table class="data"><tr><th>Section</th><th>Benar</th><th>Skor terbobot</th><th>Tingkat</th><th>Waktu</th></tr>${r.sections.map((s) => `<tr><td>${secName(s.section)} ${s.key.slice(1)}</td><td>${s.c}/${s.n}</td><td>${pct(s.p)}</td><td>${s.tier === 'router' ? 'routing' : s.tier}</td><td>${mmss(s.secs * 1000)}</td></tr>`).join('')}</table>
@@ -501,6 +547,7 @@ function viewResult(id) {
     ${r.kind === 'day' ? `<div class="card"><h3>Perubahan level</h3><p>Verbal: <b>${E.thetaToScore(r.thetaStart.V)} → ${E.thetaToScore(r.thetaEnd.V)}</b><br>Quant: <b>${E.thetaToScore(r.thetaStart.Q)} → ${E.thetaToScore(r.thetaEnd.Q)}</b></p><p class="muted">Estimasi skor adaptif (bukan skor resmi).</p></div>` : ''}</div>
     ${r.kind === 'day' ? `<div class="card"><h3>Kurva kesulitan</h3><p class="muted">Tiap titik = satu soal (tinggi = tingkat kesulitan). Hijau benar, merah salah. Garis putus-putus memisahkan Verbal dan Quant.</p><div class="scroll-x">${curveSvg(r.curve)}</div></div>` : ''}
     <div class="card"><h3>Akurasi per topik</h3>${topicBars(r.topics)}</div>
+    ${r.kind === 'day' ? `<div class="card"><h3>Kosakata Day ${r.day}</h3><div class="words">${VOC.wordsForDay(r.day).map(wordCard).join('')}</div><div class="actions"><a class="btn" href="#/vocab/review">Review kosakata</a></div></div>` : ''}
     <div class="actions">${nk && r.kind === 'day' ? `<a class="btn primary" href="#/start/${nk}">Lanjut: ${itemTitle(planItem(nk))}</a>` : '<a class="btn primary" href="#/">Dashboard</a>'}</div>
     <h2>Pembahasan</h2>${reviewList(r.items)}`);
 }
@@ -514,7 +561,7 @@ function heurHtml(h) {
 }
 function aiHtml(a) {
   const sc = a.subscores;
-  return `<div class="essay-fb ai"><div class="essay-score"><span>${a.score}</span><small>/ 6 &middot; penilaian AI (rubrik GRE Issue task; bukan skor resmi ETS)</small></div>
+  return `<div class="essay-fb ai"><div class="essay-score"><span>${a.score}</span><small>/ 6 &middot; penilaian AI (rubrik GRE Issue task; bukan skor resmi ETS) &middot; setara persentil ${SC.percentile('AW', a.score)}</small></div>
     <p>${esc(a.summary)}</p>
     <div class="subs">${[['position', 'Posisi'], ['development', 'Pengembangan'], ['organization', 'Organisasi'], ['language', 'Bahasa']].map(([k, l]) => `<span>${l}<b>${sc[k]}</b></span>`).join('')}</div>
     ${a.strengths.length ? `<h4>Kekuatan</h4>${listHtml(a.strengths)}` : ''}${a.improvements.length ? `<h4>Yang perlu diperbaiki</h4>${listHtml(a.improvements)}` : ''}
@@ -556,6 +603,59 @@ function viewEssay() {
     ${essayPanel('', null)}</div>`);
 }
 
+// ───────────────────────── Vocabulary trainer ─────────────────────────
+let vr = null; // current flashcard run (not persisted; grades are)
+const shuffled = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+function viewVocab(arg) {
+  if (arg === 'review') return renderVocabReview();
+  if (arg === 'list') return renderVocabList();
+  const day = currentDay(), d = vocabDeck(), todo = d.due.length + Math.min(10, d.fresh.length);
+  render(`<h1>Kosakata GRE</h1>
+    <div class="tiles"><div class="tile"><b>${d.mastered}</b><span>dikuasai</span></div><div class="tile"><b>${d.intro}</b><span>sudah diperkenalkan</span></div><div class="tile"><b>${d.due.length}</b><span>jatuh tempo</span></div><div class="tile"><b>${VOC.WORDS.length}</b><span>total kata</span></div></div>
+    <div class="actions">${todo ? `<a class="btn primary" href="#/vocab/review">Mulai review (${todo} kartu)</a>` : '<span class="muted">Tidak ada kartu jatuh tempo. Lanjutkan modul harian untuk membuka kata baru.</span>'}<a class="btn" href="#/vocab/list">Daftar lengkap</a></div>
+    <div class="card"><h3>Kosakata hari ini &mdash; Day ${day}</h3><div class="words">${VOC.wordsForDay(day).map(wordCard).join('')}</div></div>
+    <div class="card prose"><h3>Cara belajar kosakata untuk GRE</h3><ul>
+    <li><b>Belajar per kelompok sinonim.</b> Sentence Equivalence menuntut dua kata yang menghasilkan arti kalimat sama; kata di sini dikelompokkan seperti itu.</li>
+    <li><b>Waspadai jebakan pasangan sinonim.</b> Pilihan SE sering berisi dua pasangan sinonim lain yang tidak cocok dengan konteks. Tentukan dulu arti yang dibutuhkan kalimat, baru cari katanya.</li>
+    <li><b>Perhatikan konotasi.</b> <i>frugal</i> (hemat, positif) berbeda dengan <i>parsimonious</i> (kikir, negatif).</li>
+    <li><b>Ulangi berkala.</b> Kartu yang kamu ingat muncul lagi setelah 1, 3, 7, 14, lalu 30 hari; yang lupa kembali ke awal. Kata dari soal yang salah otomatis masuk review.</li>
+    <li><b>Baca teks bergaya akademik</b> (esai sains, sejarah, ekonomi). Bacaan GRE seimbang antara humaniora, ilmu sosial, dan ilmu alam.</li></ul></div>`);
+}
+function startVocabReview() {
+  const d = vocabDeck();
+  vr = { queue: [...shuffled(d.due), ...d.fresh.slice(0, 10)].slice(0, 20), i: 0, shown: false, ok: 0, again: new Set() };
+}
+function renderVocabReview() {
+  if (!vr) startVocabReview();
+  if (vr.i >= vr.queue.length) {
+    const n = vr.queue.length - vr.again.size, ok = vr.ok;
+    vr = null;
+    render(`<a class="back" href="#/vocab">&larr; Kosakata</a><div class="card flash"><h2>${n ? 'Review selesai' : 'Tidak ada kartu untuk direview'}</h2>${n ? `<p>${ok} jawaban &ldquo;ingat&rdquo;. Kartu berikutnya dijadwalkan otomatis.</p>` : '<p class="muted">Selesaikan modul harian untuk membuka kata baru, atau kembali besok.</p>'}<div class="actions center"><a class="btn primary" href="#/">Dashboard</a><a class="btn" href="#/vocab/list">Daftar kata</a></div></div>`);
+    return;
+  }
+  const w = VOC.WORD_BY[vr.queue[vr.i]];
+  render(`<a class="back" href="#/vocab">&larr; Kosakata</a><div class="card flash"><div class="muted">Kartu ${vr.i + 1} / ${vr.queue.length}</div>
+    <div class="fw">${w.word}</div><div class="pos">${POS[w.pos]}</div>
+    ${vr.shown ? `${wordCard(w)}<div class="actions center"><button class="btn danger" data-act="vno">Belum ingat</button><button class="btn primary" data-act="vyes">Ingat</button></div>` : '<p class="muted">Coba ingat artinya dan satu sinonimnya, lalu buka kartunya.</p><button class="btn primary big" data-act="vshow">Tampilkan arti</button>'}</div>`);
+}
+function vocabGrade(ok) {
+  const w = vr.queue[vr.i];
+  store.srsGrade(state, w, ok);
+  if (ok) vr.ok++; else if (!vr.again.has(w)) { vr.again.add(w); vr.queue.push(w); }
+  vr.i++; vr.shown = false;
+  persist();
+  renderVocabReview();
+}
+function renderVocabList() {
+  render(`<a class="back" href="#/vocab">&larr; Kosakata</a><h1>Daftar kosakata (${VOC.WORDS.length} kata)</h1>
+    <div class="filters"><input id="vsearch" placeholder="Cari kata atau arti (Inggris / Indonesia)" autocomplete="off"><select id="vtier"><option value="">Semua tingkat</option>${[1, 2, 3, 4, 5].map((t) => `<option value="${t}">Tingkat ${t}</option>`).join('')}</select></div>
+    <div class="words" id="vlist">${[...VOC.WORDS].sort((a, b) => a.word.localeCompare(b.word)).map((w) => wordCard(w).replace('<div class="word"', `<div class="word" data-tier="${w.tier}" data-q="${esc((w.word + ' ' + w.meaning + ' ' + w.idn).toLowerCase())}"`)).join('')}</div>`);
+}
+function filterVocab() {
+  const q = ($('#vsearch')?.value || '').trim().toLowerCase(), t = $('#vtier')?.value || '';
+  document.querySelectorAll('#vlist .word').forEach((el) => { el.hidden = (q && !el.dataset.q.includes(q)) || (t && el.dataset.tier !== t); });
+}
+
 // ───────────────────────── Mistakes / Settings / About ─────────────────────────
 function viewMistakes() {
   const list = Object.values(state.missed).sort((a, b) => b.ts - a.ts);
@@ -570,6 +670,10 @@ function viewSettings() {
     <label>Faktor waktu mock test<select name="timeScale">${[[1, '1× (waktu asli GRE)'], [1.5, '1.5× (tambahan 50%)'], [2, '2× (tambahan 100%)'], [0, 'Tanpa batas waktu']].map(([v, l]) => `<option value="${v}" ${st.timeScale === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="check"><input type="checkbox" name="sequential" ${st.sequential ? 'checked' : ''}> Kunci berurutan (modul berikutnya terbuka setelah yang sebelumnya selesai)</label>
     <label class="check"><input type="checkbox" name="showLevel" ${st.showLevel ? 'checked' : ''}> Tampilkan level adaptif saat latihan harian</label>
+    <fieldset class="target"><legend>Target skor</legend>
+    <label>Bidang studi tujuan<select name="field"><option value="">\u2014 pilih \u2014</option>${SC.FIELDS.map((f) => `<option value="${f.id}" ${state.target.field === f.id ? 'selected' : ''}>${esc(f.name)} \u2014 rata-rata V ${f.V} / Q ${f.Q}</option>`).join('')}</select></label>
+    <div class="row2"><label>Target Verbal<input name="tV" type="number" min="130" max="170" placeholder="ikut rata-rata bidang" value="${state.target.V ?? ''}"></label><label>Target Quant<input name="tQ" type="number" min="130" max="170" placeholder="ikut rata-rata bidang" value="${state.target.Q ?? ''}"></label></div>
+    <p class="muted">Rata-rata bidang berasal dari data resmi ETS (pendaftar 2022\u20132025). Program yang kompetitif biasanya menuntut lebih tinggi dari rata-rata; cek angka yang dipublikasikan program tujuanmu.</p></fieldset>
     <button class="btn primary">Simpan</button></form></div>
     <div class="card"><h3>Cadangan data</h3><p class="muted">Progres disimpan di browser ini (localStorage). Ekspor untuk memindahkan ke perangkat/browser lain.</p>
     <div class="actions"><button class="btn" data-act="export">Ekspor JSON</button><label class="btn">Impor JSON<input type="file" id="import" accept="application/json" hidden></label><button class="btn danger" data-act="resetall">Hapus semua data</button></div></div>`);
@@ -583,9 +687,20 @@ function viewAbout() {
   <li><b>Quant:</b> Quantitative Comparison, Multiple Choice (satu jawaban), Multiple Choice (pilih semua), Numeric Entry (angka atau pecahan), dan set Data Interpretation (tabel, grafik batang, diagram lingkaran) yang dipakai untuk beberapa soal. Materi: aritmetika, aljabar, geometri, analisis data, soal cerita.</li></ul>
   <h3>Cara adaptif bekerja</h3><ul><li><b>Mock test (section-adaptive, seperti GRE asli):</b> Section 1 bertingkat menengah. Persentase poin terbobot (soal sulit bernilai lebih) menentukan Section 2: mudah, menengah, atau sulit. Batas atas skor bergantung pada tingkat Section 2.</li>
   <li><b>Modul harian (question-adaptive):</b> level kemampuanmu diperbarui setelah tiap soal dengan model Elo. Benar pada soal yang sulit menaikkan level lebih banyak; soal berikutnya dipilih dekat level itu.</li></ul>
-  <h3>Batasan yang jujur</h3><ul><li>Soal-soal di sini <b>orisinal</b> (bukan soal ETS yang berhak cipta). Soal Quant dihasilkan secara parametrik sehingga hampir tak terbatas; bank Verbal ditulis manual dan terbatas (~100 soal) sehingga akan terulang pada siklus akhir. Prioritas diberikan pada soal yang belum pernah dilihat atau yang pernah salah.</li>
-  <li>Skor adalah estimasi kasar; kalibrasi kesulitan belum diuji pada peserta nyata. Gunakan untuk memantau tren, bukan sebagai prediksi skor resmi.</li>
-  <li>Untuk simulasi resmi, lengkapi dengan <i>POWERPREP</i> dari ETS.</li></ul></div>`);
+  <h3>Batasan yang jujur</h3><ul><li>Soal-soal di sini <b>orisinal</b> (bukan soal ETS yang berhak cipta). Soal Quant dan set Data Interpretation dihasilkan secara parametrik. Verbal memadukan ~100 soal tulisan tangan dengan soal Text Completion &amp; Sentence Equivalence yang dibangkitkan dari bank kosakata (77 kelompok sinonim, 247 kata), sehingga tidak cepat habis; passage Reading Comprehension masih terbatas (10 passage) dan akan berulang.</li>
+  <li>Skor latihan adalah estimasi; kalibrasi kesulitan soal belum diuji pada peserta nyata. Persentil yang ditampilkan memakai tabel resmi ETS, tetapi hanya seakurat estimasi skornya. Gunakan untuk memantau tren, bukan sebagai prediksi skor resmi.</li>
+  <li>Untuk simulasi resmi, lengkapi dengan <i>POWERPREP</i> dari ETS.</li></ul></div>
+  <div class="card prose" id="skor"><h3>Skor GRE: apa yang dianggap bagus?</h3>
+  <p>Yang menentukan &ldquo;bagus&rdquo; adalah <b>persentil</b> (persen peserta yang skornya di bawahmu) dan <b>standar program tujuan</b>, bukan angka mentahnya. Data di bawah adalah data resmi ETS.</p>
+  <table class="data"><tr><th>Skor</th><th>Persentil Verbal</th><th>Persentil Quant</th></tr>${[170, 165, 160, 155, 150, 145, 140, 135].map((x) => `<tr><td>${x}</td><td>${SC.percentile('V', x)}</td><td>${SC.percentile('Q', x)}</td></tr>`).join('')}</table>
+  <ul><li><b>Rata-rata semua peserta:</b> Verbal ${SC.STATS.V.mean.toFixed(1)} (SD ${SC.STATS.V.sd}), Quant ${SC.STATS.Q.mean.toFixed(1)} (SD ${SC.STATS.Q.sd}), Analytical Writing ${SC.STATS.AW.mean.toFixed(1)}.</li>
+  <li><b>Quant jauh lebih kompetitif:</b> 160 di Quant hanya persentil ${SC.percentile('Q', 160)}, sedangkan 160 di Verbal sudah persentil ${SC.percentile('V', 160)}. Untuk masuk 25% teratas butuh sekitar Q ${SC.scoreForPercentile('Q', 75)} tetapi cukup V ${SC.scoreForPercentile('V', 75)}.</li>
+  <li><b>Patokan kasar</b> (rumusan kami, bukan standar resmi): persentil &ge;90 sangat kompetitif, &ge;75 kompetitif, &ge;50 di atas rata-rata, di bawah 50 perlu ditingkatkan. Program top bidang STEM biasanya menekankan Quant; humaniora dan hukum menekankan Verbal dan Writing.</li>
+  <li><b>Analytical Writing:</b> ${[6, 5, 4.5, 4, 3.5, 3].map((x) => `${x.toFixed(1)} &rarr; persentil ${SC.percentile('AW', x)}`).join(' &middot; ')}.</li>
+  <li><b>Skor tidak persis:</b> galat baku pengukuran (SEM) sekitar \u00B1${SC.STATS.V.sem.toFixed(1)} poin Verbal, \u00B1${SC.STATS.Q.sem.toFixed(1)} Quant, \u00B1${SC.STATS.AW.sem} Writing. Selisih 1&ndash;3 poin antar peserta atau antar tes belum tentu berarti.</li></ul>
+  <h4>Rata-rata menurut bidang studi tujuan</h4>
+  <table class="data"><tr><th>Bidang</th><th>Verbal</th><th>Quant</th><th>Writing</th></tr>${SC.FIELDS.map((f) => `<tr><td>${esc(f.name)}</td><td>${f.V}</td><td>${f.Q}</td><td>${f.AW.toFixed(1)}</td></tr>`).join('')}</table>
+  <p class="muted">Sumber: ${SC.SOURCE}. Rata-rata bidang berasal dari mahasiswa tingkat akhir/lulusan yang menyebut bidang tujuan tersebut. Atur target kamu di <a href="#/settings">Pengaturan</a>.</p></div>`);
 }
 
 // ───────────────────────── Events ─────────────────────────
@@ -646,6 +761,9 @@ document.addEventListener('click', (e) => {
     calcclose: () => { calc.open = false; $('.calc')?.remove(); },
     calckey: () => { press(el.dataset.k); const d = $('#calc-disp'); if (d) d.textContent = calcDisplay(); const mm = $('#calc-mem'); if (mm) mm.textContent = calc.mem ? 'M' : ''; },
     calcxfer: () => { const box = document.querySelector('.ne-box'); if (box && !box.disabled && !calc.err) { box.value = calc.entry; box.dispatchEvent(new Event('input', { bubbles: true })); } },
+    vshow: () => { vr.shown = true; renderVocabReview(); },
+    vyes: () => vocabGrade(true),
+    vno: () => vocabGrade(false),
     essayheur: () => scoreEssayAction('heur'),
     essayai: () => scoreEssayAction('ai'),
     filter: () => { document.querySelectorAll('[data-act=filter]').forEach((b) => b.classList.toggle('active', b === el)); $('#rvlist').dataset.filter = el.dataset.f; },
@@ -696,6 +814,7 @@ function showCalc() {
 
 document.addEventListener('input', (e) => {
   const t = e.target;
+  if (t.id === 'vsearch') { filterVocab(); return; }
   if (t.matches('[data-act=ne]')) {
     const f = t.dataset.f;
     updateResp((it) => {
@@ -716,6 +835,7 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+  if (e.target.id === 'vtier') filterVocab();
   if (e.target.id === 'ep-sel') { const i = Number(e.target.value); state.essayDraft = { ...(state.essayDraft || { text: '' }), idx: i }; persist(); $('#ep-prompt').textContent = E.AWA_PROMPTS[i]; }
   if (e.target.id === 'import') {
     const f = e.target.files[0];
@@ -735,6 +855,8 @@ document.addEventListener('submit', (e) => {
     state.settings.timeScale = Number(fd.get('timeScale'));
     state.settings.sequential = fd.has('sequential');
     state.settings.showLevel = fd.has('showLevel');
+    const tnum = (v) => { const n = Number(v); return v !== '' && n >= 130 && n <= 170 ? Math.round(n) : null; };
+    state.target = { field: fd.get('field') || '', V: tnum(fd.get('tV')), Q: tnum(fd.get('tQ')) };
     state.settings.welcomed = true;
     flash('Pengaturan disimpan');
   }
