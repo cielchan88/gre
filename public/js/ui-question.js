@@ -36,7 +36,7 @@ function choice(kind, name, i, html, checked, disabled, extra = '', blank = '') 
   return `<label class="opt${cls(extra)}${checked ? ' sel' : ''}"><input type="${kind}" name="${name}" data-act="pick" data-i="${i}" data-b="${blank}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span class="mark"></span><span class="txt">${html}</span></label>`;
 }
 
-function passageHtml(q, resp, show) {
+function passageHtml(q, resp, show, note) {
   const p = PASSAGES[q.passage];
   let idx = 0;
   const paras = p.paras.map((sents) => `<p>${sents.map((s) => {
@@ -45,8 +45,10 @@ function passageHtml(q, resp, show) {
     const st = show ? (q.answer === i ? ' is-correct' : resp === i ? ' is-wrong' : '') : resp === i ? ' sel' : '';
     return `<span class="sent selectable${st}" data-act="${show ? '' : 'pick'}" data-i="${i}">${esc(s)}</span>`;
   }).join(' ')}</p>`).join('');
-  return `<div class="passage"><h4>${esc(p.title)}</h4>${paras}</div>`;
+  return `<div class="passage">${note ? `<p class="group-note">${note}</p>` : `<h4>${esc(p.title)}</h4>`}${paras}</div>`;
 }
+
+export const typeLabel = (q) => (q.data ? 'Data Interpretation' : TYPE_LABEL[q.type]);
 
 export function correctAnswerText(q) {
   switch (q.type) {
@@ -75,7 +77,7 @@ export function responseText(q, resp) {
  * @param opts.locked  disable inputs
  * @param opts.show    reveal correct / wrong marks
  */
-export function renderQuestion(q, resp, { locked = false, show = false } = {}) {
+export function renderQuestion(q, resp, { locked = false, show = false, group = null } = {}) {
   const name = 'a' + Math.random().toString(36).slice(2, 7);
   const inst = `<p class="inst">${instructions(q)}</p>`;
   const media = (q.figure || '') + (q.table || '');
@@ -114,7 +116,9 @@ export function renderQuestion(q, resp, { locked = false, show = false } = {}) {
     const list = q.options.map((t, i) => opt(multi ? 'checkbox' : 'radio', name, i, t, multi ? resp?.includes(i) : resp === i, optionState(q, resp, i, show))).join('');
     inner = `${inst}${media}${stemP}<div class="opts">${list}</div>`;
   }
-  if (q.passage) return `<div class="rc-layout">${passageHtml(q, resp, show)}<div class="qwrap"><p class="qtype">${TYPE_LABEL[q.type]}</p>${inner}</div></div>`;
+  const note = group ? (group.from === group.to ? `Question ${group.from} is based on the following ${q.data ? 'data' : 'passage'}.` : `Questions ${group.from} to ${group.to} are based on the following ${q.data ? 'data' : 'passage'}.`) : '';
+  if (q.passage) return `<div class="rc-layout">${passageHtml(q, resp, show, note)}<div class="qwrap">${note ? '' : `<p class="qtype">${TYPE_LABEL[q.type]}</p>`}${inner}</div></div>`;
+  if (q.data) return `<div class="rc-layout di">${`<div class="passage data-pane">${note ? `<p class="group-note">${note}</p>` : '<h4>Data Interpretation</h4>'}${q.data}</div>`}<div class="qwrap">${inner}</div></div>`;
   return `<div class="qwrap">${inner}</div>`;
 }
 

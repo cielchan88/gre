@@ -35,6 +35,9 @@ Untuk HTTPS/domain, letakkan reverse proxy (Caddy/nginx) di depan `127.0.0.1:888
 ## Cara kerja
 - **Adaptif (modul harian):** level kemampuan (skala 1–5) diperbarui tiap soal dengan model Elo; benar → soal berikutnya lebih sulit, salah → lebih mudah. Soal yang pernah salah muncul lagi lebih cepat.
 - **Adaptif (mock):** Section 1 menengah; skor terbobot kesulitan menentukan Section 2 (mudah/menengah/sulit) dan batas atas skor, seperti GRE asli.
+- **Alur mock seperti tes asli:** esai selalu pertama, lalu Verbal/Quant dalam urutan acak tanpa jeda; layar petunjuk tiap section; tombol Quit Test / Exit Section / Review / Mark / Help / Back / Next; layar akhir section (Return / Review / Continue); Review dengan status Answered / Not Answered / Incomplete / Not Seen; jam bisa disembunyikan dan muncul lagi 5 menit terakhir; Report / Cancel Scores di akhir.
+- **Susunan soal:** Text Completion di awal Verbal, lalu passage berselang Sentence Equivalence; Quantitative Comparison di awal Quant dengan set Data Interpretation (tabel / grafik batang / diagram lingkaran) di tengah.
+- **Alat:** kalkulator dengan urutan operasi, kurung, memori (MR/MC/M+), CE/C, √, ±, Transfer Display, bisa digeser; editor esai dengan Cut / Paste / Undo / Redo, tanpa spell-check, dan tidak menerima tempelan teks dari luar.
 - **Soal:** Text Completion (1–3 blank), Sentence Equivalence, Reading Comprehension (termasuk select-all & select-in-passage), Quantitative Comparison, Multiple Choice (1/banyak jawaban), Numeric Entry (angka/pecahan), kalkulator, Mark/Review/Back, timer.
 - **Progres:** disimpan di `localStorage` browser (per browser/perangkat); ada ekspor/impor JSON di Pengaturan.
 

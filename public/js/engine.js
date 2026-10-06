@@ -2,7 +2,7 @@
 // Pure logic (no DOM) so it can be unit-tested in Node.
 import { VERBAL, PASSAGES } from './bank-verbal.js';
 import { QUANT_STATIC } from './bank-quant.js';
-import { GENERATORS, generate } from './gen-quant.js';
+import { GENERATORS, generate, generateDISet } from './gen-quant.js';
 import { makeRng, clamp } from './util.js';
 import { Q_TOPICS } from './consts.js';
 
@@ -77,6 +77,17 @@ export function isAnswered(q, resp) {
   }
 }
 
+/** Some input given but not a complete answer (e.g. one of two Sentence Equivalence choices). */
+export function isPartial(q, resp) {
+  if (resp == null || isAnswered(q, resp)) return false;
+  switch (q.type) {
+    case 'tc': return Array.isArray(resp) && resp.some((v) => v != null);
+    case 'se': return Array.isArray(resp) && resp.length === 1;
+    case 'ne': return ['num', 'den', 'text'].some((k) => String(resp[k] ?? '').trim() !== '');
+    default: return false;
+  }
+}
+
 // ───────────────────────── Selection ─────────────────────────
 const seenPenalty = (seen, id) => {
   const s = seen?.[id];
@@ -143,6 +154,14 @@ export function pickPassage(target, take, ctx) {
   return qs;
 }
 
+/** Generate a Data Interpretation set and keep the `take` questions closest to `target`. */
+export function pickDISet(target, take, ctx) {
+  const qs = generateDISet(ctx.rng.int(1, 2 ** 30));
+  if (qs.length <= take) return qs;
+  const keep = [...qs].sort((a, b) => Math.abs(a.difficulty - target) - Math.abs(b.difficulty - target)).slice(0, take);
+  return qs.filter((q) => keep.includes(q));
+}
+
 // ───────────────────────── Daily practice module ─────────────────────────
 export const PRACTICE_SIZE = { V: 10, Q: 10 };
 
@@ -153,7 +172,7 @@ export function createPractice(state, planItem, now = Date.now()) {
     id: `s${now}`, kind: 'practice', key: planItem.key, day: planItem.day, topic: planItem.topic, seed, startedAt: now,
     plan: {
       V: r.shuffle(['tc', 'tc', 'tc', 'se', 'se', 'se', 'rc', 'rc']),
-      Q: r.shuffle(['qc', 'qc', 'qc', 'mc1', 'mc1', 'mc1', 'mcn', 'ne', 'ne', 'ne']),
+      Q: r.shuffle(['qc', 'qc', 'qc', 'mc1', 'mc1', 'mcn', 'ne', 'ne', 'di']),
     },
     slot: { V: 0, Q: 0 }, queue: [], genUse: {},
     thetaStart: { ...state.theta }, theta: { ...state.theta },
@@ -175,9 +194,9 @@ export function nextPracticeItem(session, state) {
     const ctx = { rng, seen: state.seen, used, topic: section === 'Q' ? session.topic : null, genUse: session.genUse };
     const target = clamp(session.theta[section] + 0.2, 1, 5);
     const slot = session.plan[section][session.slot[section]++] ?? (section === 'V' ? 'tc' : 'mc1'); // top-up if a passage yielded fewer questions
-    if (slot === 'rc') {
-      const remaining = PRACTICE_SIZE.V - count('V');
-      const qs = pickPassage(target, Math.min(2, remaining), ctx);
+    if (slot === 'rc' || slot === 'di') {
+      const remaining = PRACTICE_SIZE[section] - count(section);
+      const qs = slot === 'rc' ? pickPassage(target, Math.min(2, remaining), ctx) : pickDISet(target, Math.min(2, remaining), ctx);
       q = qs[0];
       session.queue.push(...qs.slice(1));
     } else q = pickQuestion(section, slot, target, ctx);
@@ -200,11 +219,13 @@ export function checkAnswer(session, item, ms = 0) {
 }
 
 // ───────────────────────── Full-length mock test ─────────────────────────
+// Shorter GRE (since Sept 2023): Analytical Writing first, then two Verbal and two Quant
+// sections; section 2 of each measure is chosen from performance on section 1.
 export const MOCK_SECTIONS = [
   { key: 'V1', section: 'V', n: 12, minutes: 18, role: 'router', mix: { tc: 3, se: 3, rc: 6 } },
-  { key: 'Q1', section: 'Q', n: 12, minutes: 21, role: 'router', mix: { qc: 4, mc1: 4, mcn: 1, ne: 3 } },
+  { key: 'Q1', section: 'Q', n: 12, minutes: 21, role: 'router', mix: { qc: 4, mc1: 3, mcn: 1, ne: 2, di: 2 } },
   { key: 'V2', section: 'V', n: 15, minutes: 23, role: 'adaptive', from: 'V1', mix: { tc: 4, se: 4, rc: 7 } },
-  { key: 'Q2', section: 'Q', n: 15, minutes: 26, role: 'adaptive', from: 'Q1', mix: { qc: 5, mc1: 5, mcn: 2, ne: 3 } },
+  { key: 'Q2', section: 'Q', n: 15, minutes: 26, role: 'adaptive', from: 'Q1', mix: { qc: 5, mc1: 4, mcn: 1, ne: 2, di: 3 } },
 ];
 export const AWA = { key: 'AWA', minutes: 30 };
 
@@ -226,49 +247,79 @@ export function tierTargets(tier, n, rng) {
   return rng.shuffle(out.slice(0, n));
 }
 
+/**
+ * Arrange blocks the way GRE sections are laid out:
+ *  Verbal - Text Completion first, then reading passages alternating with Sentence Equivalence.
+ *  Quant  - Quantitative Comparison first, then problem solving with the data set in the middle.
+ */
+export function orderBlocks(section, blocks, rng) {
+  const of = (t) => rng.shuffle(blocks.filter((b) => (Array.isArray(t) ? t.includes(b.type) : b.type === t)));
+  if (section === 'V') {
+    const out = of('tc'), rc = of('rc'), se = of('se');
+    while (rc.length || se.length) {
+      if (rc.length) out.push(rc.shift());
+      out.push(...se.splice(0, rc.length ? 2 : se.length));
+    }
+    return out;
+  }
+  const ps = of(['mc1', 'mcn', 'ne']), di = of('di');
+  const half = Math.ceil(ps.length / 2);
+  return [...of('qc'), ...ps.slice(0, half), ...di, ...ps.slice(half)];
+}
+
 export function buildMockSection(def, tier, state, session, seedOffset = 0) {
   const seed = session.seed + seedOffset;
   const rng = makeRng(seed);
   const used = new Set(session.used);
   const ctx = { rng, seen: state.seen, used, topic: null, genUse: {} };
   const targets = tierTargets(tier, def.n, rng);
-  // Build blocks: a non-RC block is one question; an RC block is one passage of up to 2-3 questions.
+  // A discrete question is a block of 1; a passage or data set is one block of 2-3 questions.
   const blocks = [];
   for (const [type, cnt] of Object.entries(def.mix)) {
     if (type === 'rc') {
       let left = cnt;
       while (left > 0) { const take = left >= 3 && rng.chance(0.3) ? 3 : Math.min(2, left); blocks.push({ type: 'rc', take }); left -= take; }
-    } else for (let i = 0; i < cnt; i++) blocks.push({ type, take: 1 });
+    } else if (type === 'di') blocks.push({ type: 'di', take: cnt });
+    else for (let i = 0; i < cnt; i++) blocks.push({ type, take: 1 });
   }
-  const order = rng.shuffle(blocks);
-  const qs = [];
+  const out = [];
   let ti = 0;
-  for (const b of order) {
+  for (const b of orderBlocks(def.section, blocks, rng)) {
     const target = targets[ti % targets.length];
     ti += b.take;
-    let got;
-    if (b.type === 'rc') got = pickPassage(target, b.take, ctx);
-    else got = [pickQuestion(def.section, b.type, target, ctx)];
-    for (const q of got) { ctx.used.add(q.id); qs.push(q); }
+    const got = b.type === 'rc' ? pickPassage(target, b.take, ctx) : b.type === 'di' ? pickDISet(target, b.take, ctx) : [pickQuestion(def.section, b.type, target, ctx)];
+    got.forEach((q) => ctx.used.add(q.id));
+    out.push(got);
   }
-  // Top up if a passage yielded fewer questions than requested.
-  const fillTypes = Object.keys(def.mix).filter((t) => t !== 'rc');
-  for (let i = 0; qs.length < def.n; i++) {
+  // Top up if a passage yielded fewer questions than requested (insert before the last block).
+  const fillTypes = Object.keys(def.mix).filter((t) => t !== 'rc' && t !== 'di');
+  for (let i = 0; out.flat().length < def.n; i++) {
     const q = pickQuestion(def.section, fillTypes[i % fillTypes.length], 3, ctx);
-    ctx.used.add(q.id); qs.push(q);
+    ctx.used.add(q.id);
+    out.splice(Math.max(0, out.length - 1), 0, [q]);
   }
-  for (const q of qs.slice(0, def.n)) session.used.push(q.id);
-  return qs.slice(0, def.n).map((q) => ({ q, resp: null, marked: false, visited: false, ms: 0 }));
+  const items = [];
+  for (const grp of out) {
+    const from = items.length + 1, to = items.length + grp.length;
+    for (const q of grp) {
+      if (items.length >= def.n) break;
+      items.push({ q, resp: null, marked: false, visited: false, ms: 0, group: grp.length > 1 || q.passage || q.data ? { from, to: Math.min(to, def.n) } : null });
+    }
+  }
+  items.forEach((it) => session.used.push(it.q.id));
+  return items;
 }
 
 export function createMock(state, mockNo, includeAWA = true, now = Date.now()) {
   const seed = Math.floor(Math.random() * 2 ** 30);
+  // The Verbal and Quantitative sections may appear in either order after the essay.
+  const order = makeRng(seed).chance(0.5) ? ['V1', 'Q1', 'V2', 'Q2'] : ['Q1', 'V1', 'Q2', 'V2'];
   return {
     id: `s${now}`, kind: 'mock', key: `m${mockNo}`, mockNo, seed, startedAt: now, used: [],
     thetaStart: { ...state.theta },
     mock: {
-      includeAWA, phase: 'intro', idx: -1, qi: 0, review: false,
-      sections: MOCK_SECTIONS.map((d) => ({ ...d, tier: d.role === 'router' ? 'router' : null, items: [], startedAt: null, endsAt: null, done: false, p: null })),
+      includeAWA, phase: 'intro', idx: -1, next: 0, qi: 0, review: false, endPrompt: false,
+      sections: order.map((k) => MOCK_SECTIONS.find((d) => d.key === k)).map((d) => ({ ...d, tier: d.role === 'router' ? 'router' : null, items: [], startedAt: null, endsAt: null, done: false, p: null })),
       awa: { prompt: null, text: '', startedAt: null, endsAt: null, done: false },
     },
   };

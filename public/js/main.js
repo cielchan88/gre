@@ -1,7 +1,7 @@
 import * as store from './store.js';
 import * as E from './engine.js';
-import { renderQuestion, applyPick, esc, correctAnswerText, responseText } from './ui-question.js';
-import { calc, press, calcHtml } from './ui-calc.js';
+import { renderQuestion, applyPick, esc, correctAnswerText, responseText, typeLabel, instructions } from './ui-question.js';
+import { calc, press, calcHtml, display as calcDisplay } from './ui-calc.js';
 import { estimateEssay } from './essay-score.js';
 import { DIFF_LABEL, TOPIC_LABEL, TYPE_LABEL } from './consts.js';
 
@@ -111,15 +111,19 @@ function viewIntro(key) {
       <button class="btn primary big" data-act="startday" data-key="${key}">${prog?.done ? 'Ulangi modul' : 'Mulai Day ' + p.day}</button></div>`);
     return;
   }
-  const rows = E.MOCK_SECTIONS.map((s) => `<tr><td>${secName(s.section)} &middot; Section ${s.key.slice(1)}</td><td>${s.n} soal</td><td>${s.minutes} menit</td></tr>`).join('');
+  const rows = E.MOCK_SECTIONS.filter((s) => s.role === 'router').map((s) => `<tr><td>${secName(s.section)}</td><td>2 section: 12 + 15 soal</td><td>${s.minutes} + ${E.MOCK_SECTIONS.find((x) => x.from === s.key).minutes} menit</td></tr>`).join('');
   render(`<a class="back" href="#/">&larr; Dashboard</a><div class="card intro"><span class="eyebrow">Siklus ${p.cycle} &middot; Simulasi penuh</span><h1>Mock Test ${p.mock}</h1>
-    <p>Format mengikuti GRE General Test: satu tugas <b>Analytical Writing</b> (opsional di sini), lalu <b>Verbal</b> dan <b>Quantitative</b> masing-masing dua section.</p>
-    <table class="data"><tr><th>Section</th><th>Soal</th><th>Waktu</th></tr><tr><td>Analyze an Issue (Writing)</td><td>1 esai</td><td>30 menit</td></tr>${rows}</table>
-    <ul class="facts"><li><b>Adaptif per section:</b> Section 1 berisi soal tingkat menengah. Performa di Section 1 menentukan tingkat kesulitan Section 2 (mudah / menengah / sulit), sama seperti GRE asli. Skor akhir 130&ndash;170 per bagian.</li>
-    <li>Kamu bisa <b>Mark</b>, <b>Review</b>, kembali ke soal sebelumnya <b>selama section yang sama</b>. Setelah section selesai atau waktu habis, tidak bisa kembali.</li>
-    <li>Tidak ada pembahasan selama tes. Timer tetap berjalan bila halaman dimuat ulang.</li></ul>
+    <p>Alur dan tampilan dibuat semirip mungkin dengan GRE General Test versi ringkas (sejak September 2023).</p>
+    <table class="data"><tr><th>Bagian</th><th>Isi</th><th>Waktu</th></tr><tr><td>Analytical Writing</td><td>1 esai (Analyze an Issue)</td><td>30 menit</td></tr>${rows}</table>
+    <ul class="facts">
+    <li><b>Urutan:</b> esai selalu pertama; setelah itu section Verbal dan Quant muncul dalam urutan acak (Verbal dulu atau Quant dulu). <b>Tidak ada jeda istirahat.</b></li>
+    <li><b>Adaptif per section:</b> Section 1 tiap bagian bertingkat menengah; hasilnya menentukan Section 2 (mudah / menengah / sulit) dan batas atas skor 130&ndash;170.</li>
+    <li><b>Tampilan tes:</b> layar petunjuk sebelum tiap section, tombol <b>Quit Test, Exit Section, Review, Mark, Help, Back, Next</b>, jam yang bisa disembunyikan, kalkulator (Quant) yang bisa digeser, editor esai dengan Cut / Paste / Undo / Redo tanpa spell-check.</li>
+    <li><b>Susunan soal:</b> Text Completion di awal section Verbal; Quantitative Comparison di awal section Quant, dengan satu set <b>Data Interpretation</b> (tabel/grafik untuk 2&ndash;3 soal) di tengah.</li>
+    <li>Kamu bisa kembali ke soal mana pun <b>dalam section yang sama</b>. Setelah keluar dari section atau waktu habis, tidak bisa kembali. Tidak ada pembahasan selama tes.</li>
+    <li>Di akhir tes kamu memilih <b>Report Scores</b> atau <b>Cancel Scores</b>, seperti tes asli.</li></ul>
     <label class="check"><input type="checkbox" id="awa" checked> Sertakan Analytical Writing (30 menit)</label>
-    <p class="muted">Total tanpa esai: ~1 jam 58 menit. Faktor waktu dapat diubah di Pengaturan${state.settings.timeScale !== 1 ? ` (sekarang: ${state.settings.timeScale === 0 ? 'tanpa batas waktu' : state.settings.timeScale + '×'})` : ''}.</p>
+    <p class="muted">Total waktu: 1 jam 58 menit dengan esai, 1 jam 28 menit tanpa esai. Faktor waktu dapat diubah di Pengaturan${state.settings.timeScale !== 1 ? ` (sekarang: ${state.settings.timeScale === 0 ? 'tanpa batas waktu' : state.settings.timeScale + '×'})` : ''}.</p>
     <button class="btn primary big" data-act="startmock" data-key="${key}">${prog?.done ? 'Ulangi mock test' : 'Mulai mock test'}</button></div>`);
 }
 
@@ -208,41 +212,35 @@ function finishPractice() {
 const M = () => state.session.mock;
 const curSec = () => M().sections[M().idx];
 const timeScale = () => state.settings.timeScale;
+const TEST_TITLE = 'GRE-Style Practice Test';
+const secTotal = () => M().sections.length + (M().includeAWA ? 1 : 0);
+const secNo = (i) => i + 1 + (M().includeAWA ? 1 : 0);
+const minutesText = (min) => (timeScale() ? `${Math.round(min * timeScale())} minutes` : 'untimed');
 
-function startSection(i) {
-  const s = state.session, m = M(), sec = m.sections[i];
-  if (sec.role === 'adaptive') {
-    const prev = m.sections.find((x) => x.key === sec.from);
-    sec.tier = E.routeTier(prev.p);
-  }
-  sec.items = E.buildMockSection(sec, sec.tier, state, s, i * 101);
-  sec.startedAt = Date.now();
-  sec.endsAt = timeScale() ? sec.startedAt + sec.minutes * 60000 * timeScale() : null;
-  m.idx = i; m.qi = 0; m.review = false; m.phase = 'active';
-  sec.items[0].visited = true;
-  persist();
-}
-function startMock() {
-  const m = M();
-  if (m.includeAWA) {
-    m.awa.prompt = E.AWA_PROMPTS[Math.floor(Math.random() * E.AWA_PROMPTS.length)];
-    m.awa.startedAt = Date.now();
-    m.awa.endsAt = timeScale() ? m.awa.startedAt + 30 * 60000 * timeScale() : null;
-    m.phase = 'awa';
-  } else startSection(0);
-  persist();
-}
-function renderMock() {
-  const m = M();
-  if (m.phase === 'intro') { startMock(); }
-  if (m.phase === 'awa') return renderAWA();
-  if (m.phase === 'between') return renderBetween();
-  return m.review ? renderMockReview() : renderMockQuestion();
+// Section directions (paraphrased in our own words; not ETS text).
+const DIRECTIONS = {
+  AWA: `<p>This section measures your ability to think critically and to express your ideas in writing. You will be given one <b>Issue</b> topic and 30 minutes to plan and compose a response presenting your perspective on it.</p>
+    <p>Readers evaluate how well you respond to the specific instructions, consider the complexity of the issue, organize and develop your ideas, support your position with relevant reasons and examples, and control the elements of standard written English.</p>
+    <p>Plan before you write and leave time to proofread. A response on any topic other than the one presented receives a score of zero. The editor provides Cut, Paste, Undo and Redo; there is no spell checker.</p>`,
+  V: `<p>For each question, indicate the best answer using the directions given for that question type.</p>
+    <p>Within this section you can move with <b>Back</b> and <b>Next</b>, <b>Mark</b> questions to revisit, and open <b>Review</b> to see the status of every question. Once time expires or you exit the section, you cannot return to it.</p>`,
+  Q: `<p>For each question, indicate the best answer using the directions given for that question type. An on-screen calculator is available.</p>
+    <ul><li>All numbers used are real numbers.</li>
+    <li>Geometric figures are not necessarily drawn to scale. You may assume that lines shown as straight are straight, points on a line are in the order shown, and all figures lie in a plane unless stated otherwise.</li>
+    <li>Coordinate systems, number lines, and graphs in data sets are drawn to scale.</li></ul>
+    <p>Within this section you can use <b>Back</b>, <b>Next</b>, <b>Mark</b> and <b>Review</b>. Once time expires or you exit the section, you cannot return to it.</p>`,
+};
+
+const tbtn = (act, label, { disabled = false, active = false, primary = false } = {}) =>
+  `<button class="ets-btn${active ? ' active' : ''}${primary ? ' primary' : ''}" data-act="${act}" ${disabled ? 'disabled' : ''}>${label}</button>`;
+function testHeader(sub, buttons, clock = '') {
+  return `<div class="ets-bar"><div class="ets-title">${TEST_TITLE}</div><div class="ets-btns">${buttons}</div></div>
+    <div class="ets-sub"><span>${sub}</span><span class="grow"></span>${clock}</div>`;
 }
 function clockHtml(endsAt, startedAt) {
   const hidden = state.settings.hideClock;
   const txt = endsAt ? mmss(endsAt - Date.now()) : mmss(Date.now() - startedAt);
-  return `<div class="tb-clock"><button class="btn tiny ghost" data-act="toggleclock">${hidden ? 'Show Time' : 'Hide Time'}</button><span class="clock" id="clock" ${hidden ? 'style="visibility:hidden"' : ''}>${txt}</span></div>`;
+  return `<div class="tb-clock"><span class="clock" id="clock" ${hidden ? 'style="visibility:hidden"' : ''}>${txt}</span><button class="ets-mini" data-act="toggleclock">${hidden ? 'Show Time' : 'Hide Time'}</button></div>`;
 }
 function startTicker(endsAt, startedAt, onExpire) {
   const upd = () => {
@@ -250,7 +248,9 @@ function startTicker(endsAt, startedAt, onExpire) {
     if (!c) return;
     const left = endsAt ? endsAt - Date.now() : null;
     c.textContent = endsAt ? mmss(left) : mmss(Date.now() - startedAt);
-    c.classList.toggle('warn', endsAt && left < 5 * 60000);
+    const warn = endsAt && left < 5 * 60000;
+    c.classList.toggle('warn', warn);
+    if (warn) c.style.visibility = 'visible'; // the clock reappears for the final five minutes
     if (endsAt && left <= 0) { clearInterval(tickId); onExpire(); }
   };
   clearInterval(tickId);
@@ -258,48 +258,170 @@ function startTicker(endsAt, startedAt, onExpire) {
   upd();
 }
 
+function startMock() {
+  const m = M();
+  m.next = 0;
+  if (m.includeAWA) { m.awa.prompt = E.AWA_PROMPTS[Math.floor(Math.random() * E.AWA_PROMPTS.length)]; m.phase = 'awadir'; } else m.phase = 'dir';
+  persist();
+}
+function startAWA() {
+  const a = M().awa;
+  a.startedAt = Date.now();
+  a.endsAt = timeScale() ? a.startedAt + 30 * 60000 * timeScale() : null;
+  M().phase = 'awa';
+  persist();
+}
+function startSection(i) {
+  const s = state.session, m = M(), sec = m.sections[i];
+  if (sec.role === 'adaptive') sec.tier = E.routeTier(m.sections.find((x) => x.key === sec.from).p);
+  sec.items = E.buildMockSection(sec, sec.tier, state, s, i * 101);
+  sec.startedAt = Date.now();
+  sec.endsAt = timeScale() ? sec.startedAt + sec.minutes * 60000 * timeScale() : null;
+  Object.assign(m, { idx: i, qi: 0, review: false, endPrompt: false, revSel: 0, phase: 'active' });
+  sec.items[0].visited = true;
+  persist();
+}
+function renderMock() {
+  const m = M();
+  if (m.phase === 'intro') startMock();
+  if (m.phase === 'between') { m.next = m.idx + 1; m.phase = m.next >= m.sections.length ? 'finish' : 'dir'; } // sessions saved by older versions
+  if (m.phase === 'awadir') return renderDirections('AWA');
+  if (m.phase === 'awa') return renderAWA();
+  if (m.phase === 'dir') return renderDirections(m.next);
+  if (m.phase === 'finish') return renderFinish();
+  if (m.review) return renderMockReview();
+  if (m.endPrompt) return renderEndPrompt();
+  return renderMockQuestion();
+}
+
+function renderDirections(which) {
+  const m = M(), isAWA = which === 'AWA', sec = isAWA ? null : m.sections[which];
+  const n = isAWA ? 1 : secNo(which);
+  const name = isAWA ? 'Analytical Writing' : secName(sec.section);
+  const saved = (!isAWA && (which > 0 || m.awa.done)) ? '<p class="saved">Your responses to the previous section have been saved.</p>' : '';
+  render(testHeader(`Section ${n} of ${secTotal()}`, tbtn('quit', 'Quit Test') + tbtn('dircont', 'Continue', { primary: true })) +
+    `<div class="stage dir">${saved}<h1>Section ${n} of ${secTotal()}: ${name}</h1>
+    <p class="meta">${isAWA ? `1 task (Analyze an Issue) &middot; ${minutesText(30)}` : `${sec.n} questions &middot; ${minutesText(sec.minutes)}`}</p>
+    ${DIRECTIONS[isAWA ? 'AWA' : sec.section]}<p>Click <b>Continue</b> to begin. The section timer starts when the first ${isAWA ? 'screen' : 'question'} appears.</p></div>`, { plain: true });
+}
+
+// ── Essay editor (Cut / Paste / Undo / Redo with an internal clipboard, like the test software) ──
+const ed = { undo: [], redo: [], prev: '', at: 0, buf: '' };
 function renderAWA() {
   const m = M(), a = m.awa;
+  Object.assign(ed, { undo: [], redo: [], prev: a.text, at: 0 });
   const words = (a.text.trim().match(/\S+/g) || []).length;
-  render(`<div class="testbar gre"><div><b>Analytical Writing</b> &middot; Analyze an Issue</div><div></div>${clockHtml(a.endsAt, a.startedAt)}</div>
-    <div class="stage awa"><p class="inst">You have 30 minutes to plan and compose a response to the topic below. A response on any other topic will receive a score of zero (in this practice, it simply won't help you).</p>
-    <div class="prompt">${esc(a.prompt).replace(/\n\n/g, '</p><p>').replace(/^/, '<p>') + '</p>'}</div>
-    <textarea id="essay" placeholder="Type your response here." spellcheck="false">${esc(a.text)}</textarea>
-    <div class="wc"><span id="wc">${words} words</span></div></div>
-    <div class="actionbar"><span class="grow"></span><button class="btn primary" data-act="awadone">Continue</button></div>`, { plain: true });
-  startTicker(a.endsAt, a.startedAt, () => endAWA(true));
+  const [issue, ...task] = a.prompt.split('\n\n');
+  render(testHeader(`Section 1 of ${secTotal()} | Analytical Writing`, tbtn('quit', 'Quit Test') + tbtn('awaexit', 'Exit Section') + tbtn('help', 'Help'), clockHtml(a.endsAt, a.startedAt)) +
+    `<div class="stage awa"><div class="prompt"><p class="issue">${esc(issue)}</p><p>${esc(task.join(' '))}</p></div>
+    <div class="ed-tools"><button class="ets-mini" data-act="edcut">Cut</button><button class="ets-mini" data-act="edpaste">Paste</button><button class="ets-mini" data-act="edundo">Undo</button><button class="ets-mini" data-act="edredo">Redo</button><span class="grow"></span><span class="wc" id="wc">${words} words</span></div>
+    <textarea id="essay" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="Response">${esc(a.text)}</textarea></div>`, { plain: true });
+  startTicker(a.endsAt, a.startedAt, endAWA);
+}
+function setEssay(text, caret) {
+  const ta = $('#essay');
+  ta.value = text;
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = caret;
+  essayChanged(text, true);
+}
+function essayChanged(text, snapshot) {
+  if (snapshot || Date.now() - ed.at > 800 || /\s$/.test(text)) { if (ed.undo[ed.undo.length - 1] !== ed.prev) ed.undo.push(ed.prev); ed.at = Date.now(); if (ed.undo.length > 300) ed.undo.shift(); }
+  if (!snapshot) ed.redo = [];
+  ed.prev = text;
+  M().awa.text = text;
+  $('#wc').textContent = `${(text.trim().match(/\S+/g) || []).length} words`;
+  clearTimeout(viewSession._t); viewSession._t = setTimeout(persist, 600);
+}
+function edCut() {
+  const ta = $('#essay'), { selectionStart: a, selectionEnd: b, value: v } = ta;
+  if (a === b) return;
+  ed.buf = v.slice(a, b);
+  ed.redo = [];
+  setEssay(v.slice(0, a) + v.slice(b), a);
+}
+function edPaste() {
+  const ta = $('#essay'), { selectionStart: a, selectionEnd: b, value: v } = ta;
+  if (!ed.buf) return;
+  ed.redo = [];
+  setEssay(v.slice(0, a) + ed.buf + v.slice(b), a + ed.buf.length);
+}
+function edUndo() {
+  if (!ed.undo.length) return;
+  const ta = $('#essay');
+  ed.redo.push(ta.value);
+  const t = ed.undo.pop();
+  ta.value = t; ed.prev = t; M().awa.text = t;
+  $('#wc').textContent = `${(t.trim().match(/\S+/g) || []).length} words`;
+  persist();
+}
+function edRedo() {
+  if (!ed.redo.length) return;
+  const ta = $('#essay');
+  ed.undo.push(ta.value);
+  const t = ed.redo.pop();
+  ta.value = t; ed.prev = t; M().awa.text = t;
+  $('#wc').textContent = `${(t.trim().match(/\S+/g) || []).length} words`;
+  persist();
 }
 function endAWA() {
   const m = M();
   m.awa.done = true;
+  m.awa.endedAt = Date.now();
+  m.phase = 'dir'; m.next = 0;
   persist();
-  startSection(0);
   route();
 }
 
+// ── Section screens ──
 function statusOf(it) {
-  return E.isAnswered(it.q, it.resp) ? 'answered' : it.visited ? 'incomplete' : 'unseen';
+  if (E.isAnswered(it.q, it.resp)) return 'Answered';
+  if (E.isPartial(it.q, it.resp)) return 'Incomplete';
+  return it.visited ? 'Not Answered' : 'Not Seen';
 }
+const sectionSub = (extra = '') => `Section ${secNo(M().idx)} of ${secTotal()} | ${secName(curSec().section)}${extra}`;
 function renderMockQuestion() {
   const m = M(), sec = curSec(), it = sec.items[m.qi], q = it.q;
   it.visited = true;
-  const secNo = sec.key.slice(1);
-  render(`<div class="testbar gre"><div><b>${secName(sec.section)}</b> &middot; Section ${secNo} of 2</div><div></div>${clockHtml(sec.endsAt, sec.startedAt)}</div>
-    <div class="toolbar"><button class="btn small" data-act="exitsec">Exit Section</button><button class="btn small" data-act="mreview">Review</button>
-    <button class="btn small ${it.marked ? 'active' : ''}" data-act="mmark">${it.marked ? '⚑ Marked' : '⚐ Mark'}</button>${sec.section === 'Q' ? '<button class="btn small" data-act="calcopen">Calculator</button>' : ''}
-    <span class="grow"></span><span class="qno">Question ${m.qi + 1} of ${sec.items.length}</span>
-    <button class="btn small" data-act="mback" ${m.qi === 0 ? 'disabled' : ''}>◀ Back</button><button class="btn small primary" data-act="mnext">${m.qi === sec.items.length - 1 ? 'Review ▶' : 'Next ▶'}</button></div>
-    <div class="stage" id="stage">${renderQuestion(q, it.resp)}</div>${calc.open ? calcHtml() : ''}`, { plain: true });
-  startTicker(sec.endsAt, sec.startedAt, () => endSection(true));
+  const btns = tbtn('quit', 'Quit Test') + tbtn('exitsec', 'Exit Section') + tbtn('mreview', 'Review') + tbtn('mmark', it.marked ? 'Marked' : 'Mark', { active: it.marked }) + tbtn('help', 'Help') +
+    (sec.section === 'Q' ? tbtn('calcopen', 'Calculator') : '') + tbtn('mback', 'Back', { disabled: m.qi === 0 }) + tbtn('mnext', 'Next', { primary: true });
+  render(testHeader(`${sectionSub()} | Question ${m.qi + 1} of ${sec.items.length}`, btns, clockHtml(sec.endsAt, sec.startedAt)) +
+    `<div class="stage" id="stage">${renderQuestion(q, it.resp, { group: it.group })}</div>${calc.open ? calcHtml() : ''}`, { plain: true });
+  startTicker(sec.endsAt, sec.startedAt, endSection);
+}
+function renderEndPrompt() {
+  const sec = curSec();
+  const open = sec.items.filter((it) => statusOf(it) !== 'Answered').length;
+  render(testHeader(sectionSub(), tbtn('quit', 'Quit Test') + tbtn('help', 'Help'), clockHtml(sec.endsAt, sec.startedAt)) +
+    `<div class="stage dir"><h2>You have reached the end of this section.</h2>
+    <p>You still have time remaining to review your answers${open ? `; <b>${open}</b> question${open > 1 ? 's are' : ' is'} not answered` : ''}.</p>
+    <ul><li>Click <b>Return</b> to go back to the last question.</li><li>Click <b>Review Screen</b> to see the status of every question and go to any of them.</li><li>Click <b>Continue</b> to leave this section. You will not be able to return to it.</li></ul>
+    <div class="actions">${tbtn('endreturn', 'Return')}${tbtn('mreview', 'Review Screen')}${tbtn('endcontinue', 'Continue', { primary: true })}</div></div>`, { plain: true });
+  startTicker(sec.endsAt, sec.startedAt, endSection);
 }
 function renderMockReview() {
   const m = M(), sec = curSec();
-  const unanswered = sec.items.filter((it) => !E.isAnswered(it.q, it.resp)).length;
-  render(`<div class="testbar gre"><div><b>${secName(sec.section)}</b> &middot; Section ${sec.key.slice(1)} of 2 &middot; Review</div><div></div>${clockHtml(sec.endsAt, sec.startedAt)}</div>
-    <div class="stage"><h2>Review List</h2><p class="inst">Click a question to return to it. ${unanswered ? `<b>${unanswered}</b> question${unanswered > 1 ? 's are' : ' is'} not yet answered.` : 'All questions have been answered.'} You can change answers until you submit the section or time runs out.</p>
-    <table class="rv-table"><tr><th>#</th><th>Type</th><th>Status</th><th>Marked</th></tr>${sec.items.map((it, i) => `<tr data-act="goq" data-i="${i}" class="${statusOf(it)}"><td>${i + 1}</td><td>${TYPE_LABEL[it.q.type]}</td><td>${statusOf(it) === 'answered' ? 'Answered' : statusOf(it) === 'incomplete' ? 'Incomplete' : 'Not seen'}</td><td>${it.marked ? '⚑' : ''}</td></tr>`).join('')}</table></div>
-    <div class="actionbar"><button class="btn" data-act="goq" data-i="${m.qi}">Return to Question</button><span class="grow"></span><button class="btn primary" data-act="exitsec">Submit Section</button></div>`, { plain: true });
-  startTicker(sec.endsAt, sec.startedAt, () => endSection(true));
+  const sel = m.revSel ?? m.qi;
+  render(testHeader(sectionSub(' | Review'), tbtn('quit', 'Quit Test') + tbtn('exitsec', 'Exit Section') + tbtn('help', 'Help') + tbtn('revgo', 'Go to Question') + tbtn('revreturn', 'Return', { primary: true }), clockHtml(sec.endsAt, sec.startedAt)) +
+    `<div class="stage"><p class="inst">Below is a list of the questions in this section with their status. To go to a question, click its row and then click <b>Go to Question</b> (or double-click the row). Click <b>Return</b> to go back to the question you were on.</p>
+    <table class="rv-table"><tr><th>Question Number</th><th>Status</th><th>Marked</th></tr>${sec.items.map((it, i) => { const st = statusOf(it); return `<tr data-act="revsel" data-i="${i}" class="${st.replace(' ', '-').toLowerCase()}${i === sel ? ' selected' : ''}"><td>${i + 1}</td><td>${st}</td><td>${it.marked ? '✓' : ''}</td></tr>`; }).join('')}</table></div>`, { plain: true });
+  startTicker(sec.endsAt, sec.startedAt, endSection);
+}
+function showHelp() {
+  const m = M();
+  const q = m.phase === 'active' && !m.review && !m.endPrompt ? curSec().items[m.qi].q : null;
+  const which = m.phase === 'awa' ? 'AWA' : curSec().section;
+  $('.modal')?.remove();
+  app.insertAdjacentHTML('beforeend', `<div class="modal" role="dialog" aria-label="Help"><div class="modal-box"><h2>Help</h2>
+    <p class="muted">The clock keeps running while Help is open.</p>
+    ${q ? `<h3>Question directions: ${typeLabel(q)}</h3><p>${instructions(q)}</p>` : ''}
+    <h3>Section directions</h3>${DIRECTIONS[which]}
+    <h3>Testing tools</h3><ul><li><b>Quit Test</b> ends the test without scores.</li><li><b>Exit Section</b> submits this section; you cannot return.</li>
+    <li><b>Review</b> lists every question with its status (Answered, Not Answered, Incomplete, Not Seen) and whether it is marked.</li>
+    <li><b>Mark</b> flags the current question so it stands out on the Review screen.</li><li><b>Back</b> / <b>Next</b> move between questions in this section.</li>
+    ${which === 'Q' ? '<li><b>Calculator</b> opens a movable calculator that follows the order of operations; <b>Transfer Display</b> copies its value into a Numeric Entry box.</li>' : ''}
+    <li><b>Hide Time</b> hides the clock; it reappears automatically for the last five minutes.</li></ul>
+    <div class="actions">${tbtn('helpclose', 'Return', { primary: true })}</div></div></div>`);
 }
 function endSection() {
   const m = M(), sec = curSec();
@@ -308,16 +430,19 @@ function endSection() {
   sec.p = E.weighted(sec.items);
   sec.endedAt = Date.now();
   for (const it of sec.items) { it.correct = E.grade(it.q, it.resp); store.recordSeen(state, it.q, it.correct); }
-  m.phase = 'between';
+  m.next = m.idx + 1;
+  m.phase = m.next >= m.sections.length ? 'finish' : 'dir';
+  m.review = false; m.endPrompt = false;
+  calc.open = false;
   persist();
   route();
 }
-function renderBetween() {
-  const m = M(), sec = curSec(), last = m.idx === m.sections.length - 1, next = m.sections[m.idx + 1];
-  const s = E.sectionSummary(sec.items);
-  render(`<div class="stage center"><h1>Section complete</h1><p>You answered <b>${s.answered}</b> of <b>${s.n}</b> questions in ${secName(sec.section)} Section ${sec.key.slice(1)}. Your answers have been recorded and cannot be changed.</p>
-    <p class="muted">${last ? 'That was the last section. Your score report will be prepared next.' : `Next: ${secName(next.section)} Section ${next.key.slice(1)} &middot; ${next.n} questions &middot; ${next.minutes} minutes${timeScale() && timeScale() !== 1 ? ` (×${timeScale()})` : ''}. Take a short break if you need one; the timer starts when you continue.`}</p>
-    <button class="btn primary big" data-act="msecnext">${last ? 'See my results' : 'Continue'}</button></div>`, { plain: true });
+function renderFinish() {
+  render(testHeader('Test complete', tbtn('reportscores', 'Report Scores', { primary: true }) + tbtn('cancelscores', 'Cancel Scores')) +
+    `<div class="stage dir"><h1>You have completed the test.</h1>
+    <p>As on the real test, you now choose whether to <b>report</b> or <b>cancel</b> your scores before seeing them.</p>
+    <ul><li><b>Report Scores</b>: your unofficial Verbal and Quantitative scores are shown and this mock test is recorded in your progress.</li>
+    <li><b>Cancel Scores</b>: no scores are shown or recorded, and this mock test stays open to retake.</li></ul></div>`, { plain: true });
 }
 function finishMock() {
   const s = state.session, m = M();
@@ -340,7 +465,7 @@ function finishMock() {
 function reviewList(items) {
   if (!items) return '<p class="muted">Detail soal sudah dihapus untuk hasil lama (hanya 12 hasil terakhir disimpan lengkap).</p>';
   return `<div class="filter"><button class="btn small active" data-act="filter" data-f="all">Semua (${items.length})</button><button class="btn small" data-act="filter" data-f="bad">Salah (${items.filter((i) => !i.correct).length})</button></div>
-  <div id="rvlist">${items.map((it, i) => `<details class="rv ${it.correct ? 'ok' : 'bad'}"><summary><span class="n">${i + 1}</span><span class="t">${TYPE_LABEL[it.q.type]}</span><span class="d">${DIFF_LABEL[it.q.difficulty]}</span><span class="r">${it.correct ? '✔' : it.resp == null ? '—' : '✘'}</span></summary>
+  <div id="rvlist">${items.map((it, i) => `<details class="rv ${it.correct ? 'ok' : 'bad'}"><summary><span class="n">${i + 1}</span><span class="t">${typeLabel(it.q)}</span><span class="d">${DIFF_LABEL[it.q.difficulty]}</span><span class="r">${it.correct ? '✔' : it.resp == null ? '—' : '✘'}</span></summary>
     ${renderQuestion(it.q, it.resp, { locked: true, show: true })}<div class="expl"><p><b>Jawabanmu:</b> ${responseText(it.q, it.resp)}<br><b>Jawaban benar:</b> ${correctAnswerText(it.q)}</p><p>${it.q.explain || ''}</p></div></details>`).join('')}</div>`;
 }
 function topicBars(topics) {
@@ -436,7 +561,7 @@ function viewMistakes() {
   const list = Object.values(state.missed).sort((a, b) => b.ts - a.ts);
   render(`<h1>Soal yang pernah salah</h1>${list.length ? `<p>${list.length} soal. Jawab benar saat latihan ulang untuk mengeluarkannya dari daftar ini.</p>
     <div class="actions"><button class="btn primary" data-act="startreview">Latihan ulang (maks. 10 soal)</button></div>
-    <div id="rvlist">${list.slice(0, 40).map((m, i) => `<details class="rv bad"><summary><span class="n">${i + 1}</span><span class="t">${TYPE_LABEL[m.q.type]}</span><span class="d">${DIFF_LABEL[m.q.difficulty]}</span><span class="r">${dateStr(m.ts)}</span></summary>${renderQuestion(m.q, null, { locked: true, show: true })}<div class="expl"><p><b>Jawaban benar:</b> ${correctAnswerText(m.q)}</p><p>${m.q.explain || ''}</p></div></details>`).join('')}</div>` : '<div class="card"><p>Belum ada soal yang salah. Selesaikan modul harian dulu.</p></div>'}`);
+    <div id="rvlist">${list.slice(0, 40).map((m, i) => `<details class="rv bad"><summary><span class="n">${i + 1}</span><span class="t">${typeLabel(m.q)}</span><span class="d">${DIFF_LABEL[m.q.difficulty]}</span><span class="r">${dateStr(m.ts)}</span></summary>${renderQuestion(m.q, null, { locked: true, show: true })}<div class="expl"><p><b>Jawaban benar:</b> ${correctAnswerText(m.q)}</p><p>${m.q.explain || ''}</p></div></details>`).join('')}</div>` : '<div class="card"><p>Belum ada soal yang salah. Selesaikan modul harian dulu.</p></div>'}`);
 }
 function viewSettings() {
   const st = state.settings;
@@ -455,7 +580,7 @@ function viewAbout() {
   <table class="data"><tr><th>Bagian</th><th>Soal</th><th>Waktu</th></tr><tr><td>Analytical Writing (Analyze an Issue)</td><td>1 tugas</td><td>30 mnt</td></tr><tr><td>Verbal Reasoning</td><td>2 section: 12 + 15</td><td>18 + 23 mnt</td></tr><tr><td>Quantitative Reasoning</td><td>2 section: 12 + 15</td><td>21 + 26 mnt</td></tr></table>
   <p>Skor Verbal dan Quant: 130&ndash;170 (kenaikan 1 poin). Analytical Writing: 0&ndash;6.</p>
   <h3>Jenis soal yang ada</h3><ul><li><b>Verbal:</b> Text Completion (1&ndash;3 blank), Sentence Equivalence, Reading Comprehension (pilihan tunggal, &ldquo;pilih semua yang benar&rdquo;, dan Select-in-Passage).</li>
-  <li><b>Quant:</b> Quantitative Comparison, Multiple Choice (satu jawaban), Multiple Choice (pilih semua), Numeric Entry (angka atau pecahan). Materi: aritmetika, aljabar, geometri, analisis data, soal cerita.</li></ul>
+  <li><b>Quant:</b> Quantitative Comparison, Multiple Choice (satu jawaban), Multiple Choice (pilih semua), Numeric Entry (angka atau pecahan), dan set Data Interpretation (tabel, grafik batang, diagram lingkaran) yang dipakai untuk beberapa soal. Materi: aritmetika, aljabar, geometri, analisis data, soal cerita.</li></ul>
   <h3>Cara adaptif bekerja</h3><ul><li><b>Mock test (section-adaptive, seperti GRE asli):</b> Section 1 bertingkat menengah. Persentase poin terbobot (soal sulit bernilai lebih) menentukan Section 2: mudah, menengah, atau sulit. Batas atas skor bergantung pada tingkat Section 2.</li>
   <li><b>Modul harian (question-adaptive):</b> level kemampuanmu diperbarui setelah tiap soal dengan model Elo. Benar pada soal yang sulit menaikkan level lebih banyak; soal berikutnya dipilih dekat level itu.</li></ul>
   <h3>Batasan yang jujur</h3><ul><li>Soal-soal di sini <b>orisinal</b> (bukan soal ETS yang berhak cipta). Soal Quant dihasilkan secara parametrik sehingga hampir tak terbatas; bank Verbal ditulis manual dan terbatas (~100 soal) sehingga akan terulang pada siklus akhir. Prioritas diberikan pada soal yang belum pernah dilihat atau yang pernah salah.</li>
@@ -499,18 +624,28 @@ document.addEventListener('click', (e) => {
     abandon: () => { if (confirm('Batalkan sesi yang sedang berjalan? Progres sesi ini akan hilang.')) { state.session = null; persist(); route(); } },
     pcheck: practiceCheck, pnext: practiceNext,
     mmark: () => { const it = curSec().items[M().qi]; it.marked = !it.marked; persist(); renderMockQuestion(); },
-    mnext: () => { const m = M(), sec = curSec(); if (m.qi < sec.items.length - 1) { m.qi++; persist(); renderMockQuestion(); } else { m.review = true; persist(); renderMockReview(); } },
+    mnext: () => { const m = M(), sec = curSec(); if (m.qi < sec.items.length - 1) m.qi++; else m.endPrompt = true; persist(); renderMock(); },
     mback: () => { const m = M(); if (m.qi > 0) { m.qi--; persist(); renderMockQuestion(); } },
-    mreview: () => { M().review = true; persist(); renderMockReview(); },
-    goq: () => { const m = M(); m.qi = Number(el.dataset.i); m.review = false; persist(); renderMockQuestion(); },
-    exitsec: () => { const sec = curSec(); const un = sec.items.filter((it) => !E.isAnswered(it.q, it.resp)).length; if (confirm(`Submit this section now?${un ? ` ${un} question(s) are unanswered.` : ''} You will not be able to return to it.`)) endSection(); },
-    msecnext: () => { const m = M(); if (m.idx === m.sections.length - 1) finishMock(); else { startSection(m.idx + 1); route(); } },
-    awadone: () => { if (confirm('Finish the essay and continue to the next section?')) endAWA(); },
-    toggleclock: () => { state.settings.hideClock = !state.settings.hideClock; persist(); const c = $('#clock'); if (c) c.style.visibility = state.settings.hideClock ? 'hidden' : 'visible'; el.textContent = state.settings.hideClock ? 'Show Time' : 'Hide Time'; },
+    mreview: () => { const m = M(); m.review = true; m.endPrompt = false; m.revSel = m.qi; persist(); renderMockReview(); },
+    revsel: () => { M().revSel = Number(el.dataset.i); document.querySelectorAll('.rv-table tr.selected').forEach((r) => r.classList.remove('selected')); el.classList.add('selected'); persist(); },
+    revgo: () => { const m = M(); m.qi = m.revSel ?? m.qi; m.review = false; persist(); renderMockQuestion(); },
+    revreturn: () => { M().review = false; persist(); renderMockQuestion(); },
+    endreturn: () => { M().endPrompt = false; persist(); renderMockQuestion(); },
+    endcontinue: () => { if (confirm('Leave this section? You will not be able to return to it.')) endSection(); },
+    exitsec: () => { const open = curSec().items.filter((it) => statusOf(it) !== 'Answered').length; if (confirm(`Exit this section now?${open ? ` ${open} question(s) are not answered.` : ''} You will not be able to return to it.`)) endSection(); },
+    dircont: () => { if (M().phase === 'awadir') startAWA(); else startSection(M().next); route(); },
+    awaexit: () => { if (confirm('Exit the Analytical Writing section? You will not be able to return to your response.')) endAWA(); },
+    edcut: edCut, edpaste: edPaste, edundo: edUndo, edredo: edRedo,
+    help: showHelp,
+    helpclose: () => $('.modal')?.remove(),
+    quit: () => { if (confirm('Quit the test? Your responses will not be scored and this mock test will not be recorded.')) { state.session = null; calc.open = false; persist(); location.hash = '#/'; } },
+    reportscores: finishMock,
+    cancelscores: () => { if (confirm('Cancel your scores? Nothing from this attempt will be recorded.')) { state.session = null; persist(); flash('Skor dibatalkan. Mock test ini belum tercatat.'); location.hash = '#/'; } },
+    toggleclock: () => { state.settings.hideClock = !state.settings.hideClock; persist(); const c = $('#clock'); if (c && !c.classList.contains('warn')) c.style.visibility = state.settings.hideClock ? 'hidden' : 'visible'; el.textContent = state.settings.hideClock ? 'Show Time' : 'Hide Time'; },
     calcopen: () => { calc.open = true; showCalc(); },
     calcclose: () => { calc.open = false; $('.calc')?.remove(); },
-    calckey: () => { press(el.dataset.k); const d = $('#calc-disp'); if (d) d.textContent = calc.disp.replace('-', '−'); },
-    calcxfer: () => { const box = document.querySelector('.ne-box'); if (box && !box.disabled) { box.value = calc.disp === 'Error' ? '' : calc.disp; box.dispatchEvent(new Event('input', { bubbles: true })); } },
+    calckey: () => { press(el.dataset.k); const d = $('#calc-disp'); if (d) d.textContent = calcDisplay(); const mm = $('#calc-mem'); if (mm) mm.textContent = calc.mem ? 'M' : ''; },
+    calcxfer: () => { const box = document.querySelector('.ne-box'); if (box && !box.disabled && !calc.err) { box.value = calc.entry; box.dispatchEvent(new Event('input', { bubbles: true })); } },
     essayheur: () => scoreEssayAction('heur'),
     essayai: () => scoreEssayAction('ai'),
     filter: () => { document.querySelectorAll('[data-act=filter]').forEach((b) => b.classList.toggle('active', b === el)); $('#rvlist').dataset.filter = el.dataset.f; },
@@ -518,6 +653,40 @@ document.addEventListener('click', (e) => {
     resetall: () => { if (confirm('Hapus SEMUA progres dan riwayat? Tindakan ini tidak bisa dibatalkan.')) { state = store.reset(); location.hash = '#/'; route(); } },
   };
   if (handlers[act]) { e.preventDefault(); handlers[act](); }
+});
+
+document.addEventListener('dblclick', (e) => {
+  const row = e.target.closest('tr[data-act=revsel]');
+  if (row) { const m = M(); m.qi = Number(row.dataset.i); m.review = false; persist(); renderMockQuestion(); }
+});
+
+// Calculator window can be dragged by its title bar.
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  const h = e.target.closest('[data-drag=calc]');
+  if (!h || e.target.closest('button')) return;
+  const box = h.parentElement.getBoundingClientRect();
+  drag = { dx: e.clientX - box.left, dy: e.clientY - box.top };
+  h.setPointerCapture(e.pointerId);
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const el = $('.calc');
+  calc.x = Math.max(0, Math.min(window.innerWidth - el.offsetWidth, e.clientX - drag.dx));
+  calc.y = Math.max(0, Math.min(window.innerHeight - el.offsetHeight, e.clientY - drag.dy));
+  Object.assign(el.style, { left: calc.x + 'px', top: calc.y + 'px', right: 'auto', bottom: 'auto' });
+});
+document.addEventListener('pointerup', () => { drag = null; });
+
+// The essay editor uses its own clipboard: outside text cannot be pasted in, as on the test.
+document.addEventListener('paste', (e) => { if (e.target.id === 'essay') { e.preventDefault(); edPaste(); } });
+document.addEventListener('cut', (e) => { if (e.target.id === 'essay') { e.preventDefault(); edCut(); } });
+document.addEventListener('copy', (e) => { if (e.target.id === 'essay') { const t = e.target; ed.buf = t.value.slice(t.selectionStart, t.selectionEnd); } });
+document.addEventListener('drop', (e) => { if (e.target.id === 'essay') e.preventDefault(); });
+document.addEventListener('keydown', (e) => {
+  if (e.target.id !== 'essay' || !(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); edUndo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); edRedo(); }
 });
 
 function showCalc() {
@@ -542,9 +711,7 @@ document.addEventListener('input', (e) => {
     $('#ep-wc').textContent = `${(t.value.trim().match(/\S+/g) || []).length} words`;
     clearTimeout(viewSession._t); viewSession._t = setTimeout(persist, 600);
   } else if (t.id === 'essay') {
-    M().awa.text = t.value;
-    $('#wc').textContent = `${(t.value.trim().match(/\S+/g) || []).length} words`;
-    clearTimeout(viewSession._t); viewSession._t = setTimeout(persist, 600);
+    essayChanged(t.value, false);
   }
 });
 

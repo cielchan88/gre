@@ -10,7 +10,7 @@ const poly = (a, b, c) => {
   if (c) s += signed(c);
   return s;
 };
-const fig = (svg) => `<svg class="fig" viewBox="0 0 240 170" role="img">${svg}</svg>`;
+const fig = (svg) => `<svg class="fig" viewBox="0 0 240 170" role="img">${svg}</svg><p class="fig-note">Note: Figure not drawn to scale.</p>`;
 const sqrtStr = (k, r) => (k === 1 ? `√${r}` : `${k}√${r}`);
 
 function rightTriFigure(v, h, hyp) {
@@ -559,4 +559,132 @@ export function generate(gen, d, seed) {
   const r = makeRng(seed);
   const out = g.make(r, d);
   return { id: `g:${g.id}:${d}:${seed}`, section: 'Q', type: g.type, topic: g.topic, difficulty: d, gen: g.id, seed, ...out };
+}
+
+// ───────────────────────── DATA INTERPRETATION SETS ─────────────────────────
+// A set is one table/graph shared by three questions (as on the real test). Each question
+// carries the set's display HTML in `data` so it can be rendered and reviewed on its own.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+const PIE_COLORS = ['#3b6fd8', '#e0913a', '#3aa676', '#c4534b', '#8a63c9'];
+const nearHalf = (v) => Math.abs((v % 1) - 0.5) < 0.06;
+
+function barChart(title, a, b, la, lb) {
+  const W = 360, H = 220, x0 = 40, y0 = 190, top = 20, max = 140, sc = (y0 - top) / max, gw = (W - x0 - 10) / MONTHS.length;
+  let g = '';
+  for (let v = 0; v <= max; v += 10) {
+    const y = y0 - v * sc;
+    g += `<line x1="${x0}" x2="${W - 10}" y1="${y}" y2="${y}" class="grid${v % 20 ? ' minor' : ''}"/>`;
+    if (v % 20 === 0) g += `<text x="${x0 - 6}" y="${y + 4}" text-anchor="end">${v}</text>`;
+  }
+  MONTHS.forEach((m, i) => {
+    const gx = x0 + i * gw + gw * 0.15, bw = gw * 0.33;
+    g += `<rect x="${gx}" y="${y0 - a[i] * sc}" width="${bw}" height="${a[i] * sc}" class="bar-a"/><rect x="${gx + bw}" y="${y0 - b[i] * sc}" width="${bw}" height="${b[i] * sc}" class="bar-b"/>`;
+    g += `<text x="${gx + bw}" y="${y0 + 16}" text-anchor="middle">${m}</text>`;
+  });
+  return `<figure class="chart"><figcaption>${title}</figcaption><svg viewBox="0 0 ${W} ${H + 10}" role="img">${g}</svg>
+    <div class="legend"><span><i class="bar-a"></i>${la}</span><span><i class="bar-b"></i>${lb}</span></div></figure>`;
+}
+
+function pieChart(title, cats, pcts) {
+  let a0 = -Math.PI / 2, g = '';
+  const cx = 90, cy = 90, R = 80;
+  pcts.forEach((p, i) => {
+    const a1 = a0 + (p / 100) * 2 * Math.PI;
+    const large = a1 - a0 > Math.PI ? 1 : 0;
+    g += `<path d="M${cx},${cy} L${(cx + R * Math.cos(a0)).toFixed(2)},${(cy + R * Math.sin(a0)).toFixed(2)} A${R},${R} 0 ${large} 1 ${(cx + R * Math.cos(a1)).toFixed(2)},${(cy + R * Math.sin(a1)).toFixed(2)} Z" fill="${PIE_COLORS[i]}" stroke="#fff" stroke-width="1.5"/>`;
+    a0 = a1;
+  });
+  return `<figure class="chart pie"><figcaption>${title}</figcaption><svg viewBox="0 0 180 180" role="img">${g}</svg>
+    <div class="legend col">${cats.map((c, i) => `<span><i style="background:${PIE_COLORS[i]}"></i>${c}: ${pcts[i]}%</span>`).join('')}</div></figure>`;
+}
+
+const DI_KINDS = {
+  table(r) {
+    const [unit, names] = r.pick([
+      ['Enrollment (number of students)', ['Biology', 'Chemistry', 'Economics', 'History', 'Physics']],
+      ['Revenue (in thousands of dollars)', ['North', 'South', 'East', 'West', 'Central']],
+      ['Visitors (in hundreds)', ['Museum A', 'Museum B', 'Museum C', 'Museum D', 'Museum E']],
+    ]);
+    const y1 = r.pick([2018, 2019, 2020]), y2 = y1 + 3;
+    const mult = r.shuffle([0.8, 0.9, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.4, 1.5]).slice(0, 5);
+    const v1 = names.map(() => 20 * r.int(6, 20)), v2 = v1.map((v, i) => Math.round(v * mult[i]));
+    const html = `<table class="data"><caption>${unit}, ${y1} and ${y2}</caption><tr><th></th><th>${y1}</th><th>${y2}</th></tr>${names.map((n, i) => `<tr><th>${n}</th><td>${v1[i]}</td><td>${v2[i]}</td></tr>`).join('')}<tr><th>Total</th><td>${v1.reduce((a, b) => a + b)}</td><td>${v2.reduce((a, b) => a + b)}</td></tr></table>`;
+    const qs = [];
+    const best = mult.indexOf(Math.max(...mult));
+    qs.push({ type: 'mc1', difficulty: 3, stem: `Which of the five had the greatest percent increase from ${y1} to ${y2}?`, options: names, answer: best,
+      explain: `Percent change = (${y2} − ${y1}) / ${y1}. ${names.map((n, i) => `${n}: ${fmt(+((mult[i] - 1) * 100).toFixed(1))}%`).join('; ')}. The greatest is ${names[best]}. A larger absolute increase is not necessarily a larger percent increase.` });
+    const total2 = v2.reduce((a, b) => a + b);
+    let k = r.int(0, 4);
+    for (let t = 0; t < 5 && nearHalf((100 * v2[k]) / total2); t++) k = (k + 1) % 5;
+    const share = Math.round((100 * v2[k]) / total2);
+    qs.push({ type: 'ne', difficulty: 3, stem: `In ${y2}, ${names[k]} accounted for approximately what percent of the total? Give your answer to the nearest whole percent.`, answer: { value: share },
+      explain: `${v2[k]} ÷ ${total2} ≈ ${((100 * v2[k]) / total2).toFixed(2)}%, which rounds to ${share}%.` });
+    const th = [10, 15, 20, 25, 30, 35, 40, 5].find((t) => { const c = mult.filter((m) => (m - 1) * 100 > t).length; return c >= 1 && c <= 4 && !mult.some((m) => Math.abs((m - 1) * 100 - t) < 1e-9); }) ?? 10;
+    qs.push({ type: 'mcn', difficulty: 4, stem: `For which of the following did the figure increase by more than ${th} percent from ${y1} to ${y2}? Indicate <em>all</em> such answers.`, options: names,
+      answer: mult.map((m, i) => ((m - 1) * 100 > th ? i : -1)).filter((i) => i >= 0),
+      explain: `Compute each percent change: ${names.map((n, i) => `${n} ${fmt(+((mult[i] - 1) * 100).toFixed(1))}%`).join(', ')}. Those above ${th}% are correct.` });
+    return { title: 'Data table', html, qs };
+  },
+  bar(r) {
+    const [la, lb, what] = r.pick([['Store A', 'Store B', 'Monthly sales (in thousands of dollars)'], ['Plant X', 'Plant Y', 'Monthly output (in hundreds of units)']]);
+    let a, b, diffs;
+    do {
+      a = MONTHS.map(() => 10 * r.int(2, 13)); b = MONTHS.map(() => 10 * r.int(2, 13));
+      diffs = a.map((v, i) => Math.abs(v - b[i]));
+    } while (diffs.filter((d) => d === Math.max(...diffs)).length > 1 || a[0] === a[5]);
+    const html = barChart(what, a, b, la, lb);
+    const qs = [];
+    const best = diffs.indexOf(Math.max(...diffs));
+    const months = r.shuffle(MONTHS.filter((_, i) => i !== best)).slice(0, 4).concat(MONTHS[best]).sort((x, y) => MONTHS.indexOf(x) - MONTHS.indexOf(y));
+    qs.push({ type: 'mc1', difficulty: 2, stem: `In which month was the difference between ${la} and ${lb} the greatest?`, options: months, answer: months.indexOf(MONTHS[best]),
+      explain: `Differences by month: ${MONTHS.map((m, i) => `${m} ${diffs[i]}`).join(', ')}. The greatest is ${MONTHS[best]}.` });
+    const mean = b.reduce((x, y) => x + y) / 6, m = Math.round(mean);
+    const c = numChoices(r, m, [m - 30, m - 15, m + 15, m + 30, m + 45]);
+    qs.push({ type: 'mc1', difficulty: 3, stem: `Approximately what was the average (arithmetic mean) monthly figure for ${lb} over the six months shown?`, options: c.options, answer: c.answer,
+      explain: `Sum = ${b.join(' + ')} = ${b.reduce((x, y) => x + y)}; divided by 6 ≈ ${fmt(+mean.toFixed(2))}, closest to ${m}.` });
+    const pc = ((a[5] - a[0]) / a[0]) * 100;
+    const word = pc > 0 ? 'greater' : 'less';
+    const ans = Math.round(Math.abs(pc));
+    qs.push({ type: 'ne', difficulty: 4, stem: `${la}'s figure for June was what percent ${word} than its figure for January? Give your answer to the nearest whole percent.`, answer: { value: ans }, tol: nearHalf(Math.abs(pc)) ? 0.6 : undefined,
+      explain: `|${a[5]} − ${a[0]}| / ${a[0]} × 100 ≈ ${Math.abs(pc).toFixed(2)}%, which rounds to ${ans}%.` });
+    return { title: 'Graph', html, qs };
+  },
+  pie(r) {
+    const cats = ['Salaries', 'Research', 'Marketing', 'Facilities', 'Other'];
+    let pcts;
+    do { const cuts = r.shuffle([...Array(19).keys()].map((i) => (i + 1) * 5)).slice(0, 4).sort((x, y) => x - y); pcts = [cuts[0], cuts[1] - cuts[0], cuts[2] - cuts[1], cuts[3] - cuts[2], 100 - cuts[3]]; }
+    while (pcts.some((p) => p < 5) || new Set(pcts).size < 4);
+    pcts.sort((x, y) => y - x);
+    const T = r.pick([40, 60, 80, 120, 200]);
+    const html = pieChart(`Distribution of a company's annual budget of $${T} million`, cats, pcts);
+    const qs = [];
+    const i = r.int(0, 4), amt = (T * pcts[i]) / 100;
+    const c = numChoices(r, amt, [pcts[i], (T * pcts[i]) / 10, (T * (pcts[i] + 5)) / 100, (T * (pcts[i] - 5)) / 100, T - amt]);
+    qs.push({ type: 'mc1', difficulty: 2, stem: `How much of the budget, in millions of dollars, was allocated to ${cats[i]}?`, options: c.options, answer: c.answer,
+      explain: `${pcts[i]}% of $${T} million = ${fmt(amt)} million.` });
+    let j = r.int(0, 4), k = r.int(0, 4);
+    while (pcts[j] === pcts[k]) k = (k + 1) % 5;
+    const { num, den } = reduceFrac(pcts[j], pcts[k]);
+    qs.push({ type: 'ne', difficulty: 3, fraction: true, stem: `The amount allocated to ${cats[j]} was what fraction of the amount allocated to ${cats[k]}? (Enter your answer as a fraction.)`, answer: { num, den, value: num / den },
+      explain: `Both are percents of the same total, so the fraction is ${pcts[j]}/${pcts[k]} = ${num}/${den}.` });
+    const inc = r.pick([10, 20, 25, 50]), T2 = (T * (100 + inc)) / 100;
+    const amts = pcts.map((p) => (T2 * p) / 100);
+    const sorted = [...new Set(amts)].sort((x, y) => x - y);
+    const X = sorted.length > 2 ? (sorted[1] + sorted[2]) / 2 : sorted[0] / 2;
+    const Xr = Math.round(X * 2) / 2;
+    const cut = amts.some((v) => v === Xr) ? X : Xr;
+    qs.push({ type: 'mcn', difficulty: 4, stem: `Next year the total budget will increase by ${inc} percent, and each category will keep the same percent of the total. Which categories will then receive more than $${fmt(+cut.toFixed(2))} million? Indicate <em>all</em> such categories.`, options: cats,
+      answer: amts.map((v, n) => (v > cut ? n : -1)).filter((n) => n >= 0),
+      explain: `New total = $${fmt(T2)} million. Amounts: ${cats.map((ct, n) => `${ct} ${fmt(+amts[n].toFixed(2))}`).join(', ')}.` });
+    return { title: 'Graph', html, qs };
+  },
+};
+
+/** Generate a Data Interpretation set (3 questions sharing one table/graph). */
+export function generateDISet(seed) {
+  const r = makeRng(seed);
+  const kind = r.pick(Object.keys(DI_KINDS));
+  const set = DI_KINDS[kind](r);
+  const dataId = `di:${kind}:${seed}`;
+  return set.qs.map((q, n) => ({ id: `${dataId}:${n}`, section: 'Q', topic: 'data', di: true, dataId, data: set.html, ...q }));
 }
