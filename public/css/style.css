@@ -213,3 +213,8 @@ details.rv > .qwrap, details.rv > .rc-layout, details.rv > .expl { padding: 0 16
 .filters { display: flex; gap: 8px; margin: 10px 0 14px; flex-wrap: wrap; } .filters input { flex: 1; min-width: 200px; }
 fieldset.target { border: 1px solid var(--line); border-radius: 9px; padding: 10px 14px; display: grid; gap: 10px; } fieldset.target legend { font-weight: 700; padding: 0 6px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.t52 { font-size: .68rem; font-weight: 800; color: #7a3fb0; background: #f2e8fb; border: 1px solid #cfa9ef; border-radius: 6px; padding: 0 6px; letter-spacing: .02em; }
+@media (prefers-color-scheme: dark) { .t52 { color: #d9b8f7; background: #2f1f40; border-color: #6d4a92; } }
+.word.top52 { border-color: #cfa9ef; }
+.w-note { margin-top: 6px; font-size: .82rem; background: var(--bg); border-radius: 6px; padding: 6px 8px; }
+.t52-card { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; } .t52-card > div:first-child { flex: 1; min-width: 240px; } .t52-card h3 { margin: 0; }

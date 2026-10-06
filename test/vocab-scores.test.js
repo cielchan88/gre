@@ -10,7 +10,7 @@ test('vocabulary bank: unique words, valid groups, frames with one blank', () =>
   assert.equal(new Set(words).size, words.length);
   assert.ok(words.length >= 200);
   for (const g of V.GROUPS) {
-    assert.ok(g.words.length >= 2, g.id);
+    assert.ok(g.words.length >= 1, g.id);
     assert.ok(g.words.every((w) => w.tier >= 1 && w.tier <= 5), g.id);
     for (const f of g.frames) { assert.equal(f.text.split('{1}').length, 2, g.id); assert.ok(['P', 'T'].includes(f.kind), g.id); }
     if (g.opp) { assert.ok(V.GROUP_BY_ID[g.opp], g.id); assert.equal(V.GROUP_BY_ID[g.opp].pos, g.pos, g.id); }
@@ -48,10 +48,21 @@ test('generated Text Completion: exactly one word from the right group', () => {
   }
 });
 
-test('words of the day: six per day, cycling through the whole list', () => {
+test('Top 52 list: all present with own definition, example (word in bold) and taught first', () => {
+  assert.equal(V.TOP52_WORDS.length, 52);
+  for (const w of V.TOP52_WORDS) {
+    assert.ok(w.def && w.ex, w.word);
+    assert.match(V.exampleFor(w), /<b>/, w.word);
+  }
+  const first = new Set();
+  for (let d = 1; first.size < 52; d++) V.wordsForDay(d).forEach((w) => { if (first.size < 52) first.add(w.word); });
+  assert.ok([...first].every((w) => V.WORD_BY[w].top52));
+});
+
+test('words of the day: every teachable word appears within 30 days', () => {
   const seen = new Set();
   for (let d = 1; d <= 30; d++) { const ws = V.wordsForDay(d); assert.equal(ws.length, V.WORDS_PER_DAY); ws.forEach((w) => seen.add(w.word)); }
-  assert.ok(seen.size >= Math.min(180, V.WORDS.length));
+  assert.equal(seen.size, V.WORDS.filter((w) => w.top52 || w.tier >= 2).length);
 });
 
 test('ETS percentiles: spot checks and monotonic', () => {

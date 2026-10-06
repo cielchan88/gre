@@ -33,7 +33,7 @@ Untuk HTTPS/domain, letakkan reverse proxy (Caddy/nginx) di depan `127.0.0.1:888
 - Skor bukan skor resmi ETS (yang memakai e-rater + penilai manusia).
 
 ## Kosakata & interpretasi skor
-- **Bank kosakata:** 247 kata GRE dalam 77 kelompok sinonim (definisi Inggris + arti Indonesia, sinonim, antonim, contoh kalimat). Dipakai untuk: 8 kata per hari di modul harian, review kartu (Leitner 1/3/7/14/30 hari), dan soal Text Completion / Sentence Equivalence yang dibangkitkan otomatis (pasangan sinonim jebakan diambil dari kelompok lain).
+- **Bank kosakata:** 344 kata GRE dalam 109 kelompok sinonim (definisi Inggris + arti Indonesia, sinonim, antonim, contoh kalimat), termasuk daftar **Top 52** (pilihan kata mengikuti artikel Kaplan; definisi, contoh, dan catatan ditulis ulang) yang diajarkan pertama dan punya dek review sendiri. Dipakai untuk: 11 kata per hari di modul harian (30 hari mencakup semua kata), review kartu (Leitner 1/3/7/14/30 hari), dan soal Text Completion / Sentence Equivalence yang dibangkitkan otomatis (pasangan sinonim jebakan diambil dari kelompok lain).
 - **Skor:** persentil memakai tabel resmi ETS (*GRE Guide to the Use of Scores*, data Juli 2022–Juni 2025), termasuk rata-rata per bidang studi dan SEM. Target skor / bidang studi bisa diatur di Pengaturan.
 
 ## Cara kerja

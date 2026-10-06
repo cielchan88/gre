@@ -21,7 +21,7 @@ export const GROUPS = [
   G('reserved', 'adj', 'speech', 'P', 'inclined to say little', 'pendiam, irit bicara', 'reticent:3, taciturn:4, laconic:4',
     ['Known for being {1}, the senator answered most reporters’ questions with a single word.', 'Her {1} manner in meetings led colleagues to underestimate how much she actually knew.'], 'talkative'),
   G('concise', 'adj', 'speech', 'T', 'brief but complete', 'ringkas dan padat', 'succinct:2, concise:1, pithy:4',
-    ['The editor praised the {1} summary, which captured the whole argument in two sentences.', 'Instead of the long speech everyone expected, the winner offered a {1} statement of thanks.'], 'wordy'),
+    ['The editor praised the {1} summary, which captured the whole argument in two sentences.', 'Instead of the long speech everyone expected, the winner offered a short, {1} statement of thanks.'], 'wordy'),
   G('wordy', 'adj', 'speech', 'B', 'using more words than needed', 'bertele-tele', 'verbose:2, prolix:5, long-winded:2',
     [['The report was so {1} that readers had to wade through pages of repetition to find a single conclusion.', 'T'], ['Critics found the novel {1}, padded with descriptions that added nothing to the plot.', 'T']], 'concise'),
   G('eloquent', 'adj', 'speech', 'P', 'fluent and persuasive in speech', 'fasih, pandai berbicara', 'eloquent:2, articulate:2',
@@ -37,7 +37,7 @@ export const GROUPS = [
     ['The {1} fan shoved his way to the front and started arguing with the referee.', 'Diplomats worried that the general’s {1} speeches would push the two countries toward war.']),
   G('composure', 'noun', 'temper', 'P', 'calmness under pressure', 'ketenangan, keteguhan hati', 'equanimity:4, composure:2, aplomb:5',
     ['She handled the hostile questions with remarkable {1}, never once raising her voice.']),
-  G('hostility', 'noun', 'temper', 'P', 'deep bitterness or ill will', 'permusuhan, dendam', 'rancor:4, animosity:3, enmity:4, acrimony:5',
+  G('hostility', 'noun', 'temper', 'P', 'deep bitterness or ill will', 'permusuhan, dendam', 'rancor:4, animosity:3, enmity:4, acrimony:5, antipathy:4',
     ['Years after the lawsuit, there was still deep {1} between the two former business partners.']),
   // ── will ──
   G('stubborn', 'adj', 'will', 'P', 'refusing to change one’s mind', 'keras kepala', 'obdurate:5, intransigent:4, obstinate:2, recalcitrant:5',
@@ -59,7 +59,7 @@ export const GROUPS = [
     ['The professor drew a simple diagram to {1} the difference between the two theories.'], 'obscureV'),
   G('lucid', 'adj', 'clarity', 'T', 'clear and easy to understand', 'jernih, jelas', 'lucid:3, pellucid:5, limpid:5',
     ['The textbook’s {1} prose made even quantum mechanics seem approachable to beginners.'], 'abstruse'),
-  G('abstruse', 'adj', 'clarity', 'T', 'hard to understand; known to few', 'sukar dipahami', 'abstruse:5, recondite:5, arcane:4, esoteric:4',
+  G('abstruse', 'adj', 'clarity', 'T', 'hard to understand; known to few', 'sukar dipahami', 'abstruse:5, recondite:5, arcane:4, esoteric:4, opaque:3',
     ['The lecture on medieval tax law was so {1} that only two specialists in the audience could follow it.'], 'lucid'),
   // ── time & novelty ──
   G('fleeting', 'adj', 'time', 'T', 'lasting a very short time', 'sesaat, sementara', 'ephemeral:3, transient:3, fleeting:2, evanescent:5',
@@ -87,12 +87,12 @@ export const GROUPS = [
     ['The volunteers accepted the extra work with {1}, eager to help in any way they could.'], 'torpor'),
   G('torpor', 'noun', 'effort', 'P', 'sluggishness; lack of energy', 'kelesuan', 'torpor:5, lethargy:3, lassitude:5',
     ['After the huge holiday meal, a pleasant {1} settled over the family, and nobody moved from the sofa.'], 'alacrity'),
-  G('passionate', 'adj', 'effort', 'P', 'showing intense feeling', 'bersemangat, berapi-api', 'fervent:3, ardent:3, zealous:3',
+  G('passionate', 'adj', 'effort', 'P', 'showing intense feeling', 'bersemangat, berapi-api', 'fervent:3, ardent:3, zealous:3, fervid:4',
     ['Her {1} support for the cause never faded, even after years of defeats.'], 'apathetic'),
   G('apathetic', 'adj', 'effort', 'P', 'showing little interest or concern', 'acuh tak acuh', 'apathetic:3, indifferent:2, unconcerned:2',
     ['Voters seemed {1} about the election; fewer than a third bothered to cast a ballot.'], 'passionate'),
   // ── money ──
-  G('generous', 'adj', 'money', 'P', 'very generous', 'murah hati, dermawan', 'munificent:5, magnanimous:4, bountiful:3',
+  G('generous', 'adj', 'money', 'P', 'very generous', 'murah hati, dermawan', 'munificent:5, magnanimous:4, bountiful:3, philanthropic:3',
     ['The {1} donor paid for the entire library renovation and asked that her name not appear anywhere.'], 'stingy'),
   G('stingy', 'adj', 'money', 'P', 'unwilling to spend or give', 'kikir, pelit', 'parsimonious:4, miserly:2, penurious:5, niggardly:5',
     ['The {1} landlord refused to replace the broken heater, telling the tenants to buy blankets instead.'], 'generous'),
@@ -115,7 +115,7 @@ export const GROUPS = [
   G('specious', 'adj', 'argument', 'T', 'seemingly plausible but actually false', 'tampak benar padahal keliru', 'specious:5, fallacious:4, spurious:4',
     ['The lawyer’s argument sounded convincing at first, but it proved {1} once its assumptions were examined.'], 'cogent'),
   G('cogent', 'adj', 'argument', 'T', 'clear, logical and convincing', 'meyakinkan, kuat', 'cogent:4, compelling:2, persuasive:1',
-    ['The defense presented such a {1} case that the jury reached a verdict of not guilty within an hour.'], 'specious'),
+    ['The defense presented a case so {1} that the jury reached a verdict of not guilty within an hour.'], 'specious'),
   G('bolster', 'verb', 'argument', 'T', 'to support or strengthen', 'memperkuat, menopang', 'bolster:3, buttress:4, reinforce:2',
     ['The researchers ran a second experiment to {1} the case for their original hypothesis.'], 'undermine'),
   G('corroborate', 'verb', 'argument', 'T', 'to confirm with evidence', 'menguatkan dengan bukti', 'corroborate:4, substantiate:4, verify:1',
@@ -129,7 +129,7 @@ export const GROUPS = [
     ['Known for being {1}, the CEO admitted openly that the company had cut corners on safety.'], 'mendacious'),
   G('mendacious', 'adj', 'honesty', 'P', 'dishonest; lying', 'pembohong, tidak jujur', 'mendacious:5, duplicitous:4, deceitful:2',
     ['The {1} witness changed his story three times under questioning.'], 'candid'),
-  G('credulous', 'adj', 'honesty', 'P', 'too ready to believe', 'mudah percaya, naif', 'credulous:4, gullible:2, naive:1',
+  G('credulous', 'adj', 'honesty', 'P', 'too ready to believe', 'mudah percaya, naif', 'credulous:4, gullible:2, naive:1, ingenuous:4',
     ['Only the most {1} investors believed the promise that their money would triple in a month.'], 'skeptical'),
   G('skeptical', 'adj', 'honesty', 'P', 'not easily convinced', 'ragu, skeptis', 'skeptical:2, incredulous:4, doubtful:1',
     ['When the student claimed his dog had eaten his laptop, the teacher looked {1}.'], 'credulous'),
@@ -165,7 +165,7 @@ export const GROUPS = [
     ['Critics continue to {1} the film for its daring structure and remarkable performances.'], 'castigate'),
   G('castigate', 'verb', 'judge', 'P', 'to criticize severely', 'mengecam keras, memarahi', 'castigate:4, excoriate:5, berate:3, upbraid:5',
     ['Editorials continued to {1} the minister for his clumsy handling of the crisis.'], 'praiseV'),
-  G('disparage', 'verb', 'judge', 'T', 'to speak of as unimportant', 'meremehkan, merendahkan', 'disparage:4, belittle:2, denigrate:4',
+  G('disparage', 'verb', 'judge', 'T', 'to speak of as unimportant', 'meremehkan, merendahkan', 'disparage:4, belittle:2, denigrate:4, deride:4',
     ['It is unfair to {1} the work of volunteers simply because they are not paid.']),
   G('acclaim', 'noun', 'judge', 'T', 'enthusiastic public praise', 'pujian, sanjungan', 'acclaim:3, approbation:5, praise:1',
     ['The film won nearly universal {1} from critics and audiences alike.'], 'opprobrium'),
@@ -173,7 +173,7 @@ export const GROUPS = [
     ['The company’s decision to dump waste into the river drew widespread {1}.'], 'acclaim'),
   // ── other ──
   G('novice', 'noun', 'skill', 'P', 'a beginner', 'pemula', 'neophyte:4, novice:2, tyro:5',
-    ['As a {1} in the kitchen, he burned the rice twice before learning to watch the heat.']),
+    ['As a complete {1} in the kitchen, he burned the rice twice before learning to watch the heat.']),
   G('astute', 'adj', 'skill', 'P', 'sharp and insightful', 'cerdik, jeli', 'astute:3, perspicacious:5, shrewd:2',
     ['Her {1} analysis of the market\u2014she spotted the warning signs months before anyone else\u2014allowed the firm to sell just before prices collapsed.']),
   G('harmful', 'adj', 'harm', 'T', 'causing harm', 'berbahaya, merugikan', 'pernicious:5, deleterious:5, detrimental:3, noxious:4',
@@ -184,21 +184,148 @@ export const GROUPS = [
     ['Good teachers try to {1} curiosity rather than simply reward correct answers.']),
   G('impede', 'verb', 'growth', 'T', 'to slow or block progress', 'menghambat', 'impede:3, hamper:3, hinder:2, stymie:4',
     ['Heavy snow continued to {1} the rescue efforts throughout the night.']),
+  // ── added with the "Top 52" list ──
+  G('sluggish', 'adj', 'effort', 'P', 'lacking energy; sluggish', 'lesu, tidak bertenaga', 'lethargic:3, listless:3, sluggish:2',
+    ['After the overnight flight, the team felt too {1} to do anything but sleep.']),
+  G('apathyN', 'noun', 'effort', 'P', 'lack of interest or concern', 'sikap acuh, apatis', 'apathy:3, indifference:2, unconcern:3',
+    ['Organizers blamed the low turnout on widespread {1} among younger voters.'], 'alacrity'),
+  G('laudable', 'adj', 'judge', 'T', 'deserving praise', 'patut dipuji', 'laudable:3, commendable:2, praiseworthy:2',
+    ['Providing clean water to every village is a truly {1} goal, even if it will take decades to reach.']),
+  G('revere', 'verb', 'judge', 'P', 'to regard with deep respect', 'memuliakan, menghormati', 'venerate:4, revere:3, idolize:3',
+    ['Villagers still {1} the old healer, bringing her gifts on every holiday.'], 'disparage'),
+  G('advocate', 'verb', 'argument', 'T', 'to publicly support or recommend', 'menganjurkan, membela', 'advocate:2, champion:3, espouse:4',
+    ['The senator continued to {1} stricter safety rules, giving speeches across the country in their favor.'], 'repudiate'),
+  G('engender', 'verb', 'cause', 'T', 'to cause or give rise to', 'menimbulkan, memicu', 'engender:4, generate:1, spawn:3, provoke:2',
+    ['The plan to close the only library in town was bound to {1} controversy.']),
+  G('trigger', 'verb', 'cause', 'T', 'to cause to happen suddenly', 'memicu secara tiba-tiba', 'precipitate:5, trigger:2, spark:2',
+    ['A single bank failure could {1} a nationwide financial panic.']),
+  G('abstain', 'verb', 'will', 'P', 'to deliberately hold back from doing something', 'menahan diri, berpantang', 'abstain:3, refrain:2, forbear:5',
+    ['Patients are told to {1} from eating for twelve hours before the surgery.']),
+  G('dry', 'verb', 'change', 'T', 'to remove all moisture from', 'mengeringkan', 'desiccate:5, dehydrate:2, parch:4',
+    ['Months without rain began to {1} the farmland, cracking the soil into hard plates.']),
+  G('adulterate', 'verb', 'change', 'T', 'to make impure by adding something inferior', 'mencampur dengan bahan bermutu rendah', 'adulterate:4, dilute:2, contaminate:2',
+    ['The dishonest supplier was caught trying to {1} the olive oil with cheap vegetable oil.']),
+  G('enervate', 'verb', 'energy', 'P', 'to drain of energy; weaken', 'melemahkan, menguras tenaga', 'enervate:5, debilitate:4, weaken:1',
+    ['The long illness continued to {1} her, leaving her too weak to climb the stairs.'], 'invigorate'),
+  G('invigorate', 'verb', 'energy', 'P', 'to fill with energy', 'menyegarkan, memberi semangat', 'invigorate:3, energize:2, revitalize:3',
+    ['A brisk walk in the cold air helped to {1} the tired students before the exam.'], 'enervate'),
+  G('learned', 'adj', 'skill', 'P', 'having deep, wide knowledge', 'terpelajar, berilmu luas', 'erudite:4, scholarly:2, learned:3',
+    ['The {1} historian could quote medieval chronicles from memory in three languages.']),
+  G('pedant', 'noun', 'skill', 'P', 'a person who shows off learning or fusses over minor rules', 'orang yang sok pintar / terlalu rewel soal aturan kecil', 'pedant:4, know-it-all:1',
+    ['The {1} filled every casual conversation with Latin phrases and obscure footnotes, as if to prove how much he had read.']),
+  G('misanthrope', 'noun', 'people', 'P', 'a person who dislikes people in general', 'pembenci sesama manusia', 'misanthrope:4',
+    ['A lifelong {1}, the old man avoided all company and trusted no one.']),
+  G('malleable', 'adj', 'will', 'P', 'easily shaped or influenced', 'mudah dibentuk / dipengaruhi', 'malleable:4, pliable:3, impressionable:3',
+    ['Young children\u2019s opinions are highly {1}, shaped by whatever the adults around them say.'], 'stubborn'),
+  G('ostentation', 'noun', 'money', 'P', 'showy display meant to impress', 'pamer kemewahan', 'ostentation:4, flamboyance:3, showiness:2',
+    ['The billionaire\u2019s wedding, with gold-plated invitations and a fireworks show, was an exercise in pure {1}.']),
+  G('uniform', 'adj', 'variety', 'T', 'all of the same kind', 'seragam, homogen', 'homogeneous:4, uniform:2',
+    ['The study\u2019s sample was quite {1}: every participant was a man between twenty and twenty-five.'], 'diverse'),
+  G('diverse', 'adj', 'variety', 'T', 'made up of many different kinds', 'beragam, heterogen', 'heterogeneous:4, diverse:1, varied:1',
+    ['The city\u2019s population is remarkably {1}, with residents from more than a hundred countries.'], 'uniform'),
+  G('practical', 'adj', 'realism', 'P', 'dealing with things sensibly and practically', 'pragmatis, praktis', 'pragmatic:3, practical:1',
+    ['Rather than wait for a perfect solution, the {1} mayor repaired the worst roads first with the money she had.'], 'quixotic'),
+  G('quixotic', 'adj', 'realism', 'T', 'idealistic to an unrealistic degree', 'idealis tapi tidak realistis', 'quixotic:5, idealistic:2, impractical:2',
+    ['The plan to end world hunger within a single year was admirable but {1}.'], 'practical'),
+  G('anomaly', 'noun', 'normal', 'T', 'something that departs from what is normal', 'kejanggalan, penyimpangan', 'anomaly:3, aberration:4, irregularity:2',
+    ['Her failing grade on the final was a statistical {1}; she had earned top marks on every earlier test.']),
+  G('ambiguous', 'adj', 'clarity', 'T', 'open to more than one interpretation', 'ambigu, bermakna ganda', 'equivocal:4, ambiguous:2',
+    ['The spokesperson\u2019s {1} statement could be read either as a denial or as a confession.'], 'explicit'),
+  G('explicit', 'adj', 'clarity', 'T', 'stated clearly, leaving no doubt', 'tegas, gamblang', 'unequivocal:4, explicit:2, categorical:4',
+    ['The contract was {1} on this point: any late payment would cancel the agreement.'], 'ambiguous'),
+  G('enigma', 'noun', 'mystery', 'T', 'something mysterious or puzzling', 'teka-teki, misteri', 'enigma:3, mystery:1, conundrum:4, puzzle:1',
+    ['The {1} of why the builders abandoned the city has intrigued archaeologists for a century.']),
+  G('paradox', 'noun', 'mystery', 'T', 'a seemingly self-contradictory truth', 'paradoks', 'paradox:3, contradiction:2',
+    ['It is a curious {1} that the more choices shoppers are given, the less satisfied they often feel.']),
+  G('cacophony', 'noun', 'sound', 'T', 'a harsh mixture of sounds', 'hiruk-pikuk suara', 'cacophony:4, din:3, racket:2',
+    ['The {1} of car horns and jackhammers outside made it impossible to concentrate.']),
+  G('discord', 'noun', 'temper', 'P', 'lack of harmony or agreement', 'ketidakselarasan, perselisihan', 'dissonance:4, discord:3, friction:2',
+    ['The {1} between the two departments slowed every decision, since neither would accept the other\u2019s plan.']),
+  G('eulogy', 'noun', 'speechGenre', 'T', 'a speech or text praising someone, often at a funeral', 'pidato pujian / penghormatan', 'eulogy:3, tribute:2, encomium:5',
+    ['At the memorial service, her oldest friend delivered a moving {1} that celebrated fifty years of teaching.'], 'diatribe'),
+  G('diatribe', 'noun', 'speechGenre', 'T', 'a bitter verbal attack', 'kecaman bertubi-tubi', 'diatribe:4, tirade:4, harangue:5',
+    ['Instead of the calm reply everyone expected, the coach launched into a furious {1} against the referees.'], 'eulogy'),
+  G('propriety', 'noun', 'conduct', 'P', 'correct, socially accepted behavior', 'kepantasan, sopan santun', 'propriety:4, decorum:4, etiquette:2',
+    ['Guests at the embassy dinner were expected to observe strict {1}, from the seating order to the choice of toasts.']),
+  G('audacious', 'adj', 'caution', 'P', 'boldly daring (or, in context, disrespectfully bold)', 'berani nekat; lancang', 'audacious:3, daring:2, bold:1',
+    ['Only the most {1} climbers would attempt the north face in winter without ropes.']),
 ];
 
 export const GROUP_BY_ID = Object.fromEntries(GROUPS.map((g) => [g.id, g]));
-export const WORDS = GROUPS.flatMap((g) => g.words.map((w) => ({ ...w, group: g.id, pos: g.pos, meaning: g.meaning, idn: g.idn })));
+
+// "Top 52" list (word selection follows Kaplan's "Top 52 GRE Vocabulary Words" article).
+// Definitions, example sentences and notes below are written in our own words.
+export const TOP52 = {
+  anomaly: { def: 'something that departs from what is normal or expected', ex: 'A snowstorm in the desert city was such an anomaly that schools closed for the day.' },
+  equivocal: { def: 'open to more than one interpretation; deliberately vague', ex: 'Asked whether he would run again, the senator gave an equivocal reply that satisfied no one.', note: 'Verb: equivocate (to speak vaguely to avoid committing). Opposite: unequivocal.' },
+  lucid: { def: 'clearly expressed and easy to understand', ex: 'Her lucid explanation turned a confusing chapter into a simple story.' },
+  precipitate: { def: '(verb) to cause something, usually bad, to happen suddenly or sooner than expected', ex: 'A single missed loan payment could precipitate the company\u2019s collapse.', note: 'As an adjective, precipitate means hasty or rash: a precipitate decision.' },
+  assuage: { def: 'to ease or soothe an unpleasant feeling', ex: 'A sincere apology did much to assuage her anger.' },
+  erudite: { def: 'having or showing deep, wide learning', ex: 'The erudite footnotes cited sources in Greek, Latin and Arabic.' },
+  opaque: { def: 'not letting light through; hard to understand', ex: 'The contract\u2019s opaque wording hid a fee that few customers noticed.', note: 'Opposites: transparent, lucid.' },
+  prodigal: { def: 'spending money or resources wastefully', ex: 'The prodigal heir spent his entire inheritance on racehorses within two years.', note: 'Do not confuse: a prodigy is an exceptionally gifted (often young) person; prodigious means enormous or remarkable. A prodigy may have prodigious talent without being prodigal.' },
+  enigma: { def: 'a person or thing that is mysterious and hard to understand', ex: 'The purpose of the ancient stone circles remains an enigma.', note: 'Adjective: enigmatic.' },
+  fervid: { def: 'intensely enthusiastic or passionate', ex: 'Her fervid speeches drew crowds wherever the campaign stopped.', note: 'Close to fervent and ardent.' },
+  placate: { def: 'to make someone less angry or hostile', ex: 'The manager offered a full refund to placate the furious customer.' },
+  zeal: { def: 'great energy and enthusiasm for a cause or goal', ex: 'The volunteers cleaned the beach with such zeal that they finished before noon.', note: 'Adjective: zealous. A zealot is someone with extreme, often fanatical zeal.' },
+  abstain: { def: 'to deliberately not do or have something; to decline to vote', ex: 'Three board members abstained when the merger was put to a vote.', note: 'Usually followed by \u201Cfrom\u201D: abstain from alcohol.' },
+  audacious: { def: '(1) boldly daring; (2) disrespectfully bold', ex: 'The startup\u2019s audacious goal was to put a satellite in orbit within a year.', note: 'Context decides the sense: daring (positive) or impudent (negative).' },
+  desiccate: { def: 'to dry something out completely', ex: 'Salt was once used to desiccate fish so it would keep through the winter.' },
+  gullible: { def: 'easily tricked into believing something', ex: 'Gullible buyers paid for \u201Cmiracle\u201D water that cured nothing.' },
+  laudable: { def: 'deserving praise, even if not fully successful', ex: 'The charity\u2019s goal was laudable, but its spending was badly managed.', note: 'Verb: laud (to praise).' },
+  pedant: { def: 'a person overly concerned with minor details or with displaying learning', ex: 'Only a pedant would interrupt a wedding toast to correct the speaker\u2019s grammar.', note: 'Adjective: pedantic.' },
+  vacillate: { def: 'to waver between different opinions or actions', ex: 'She vacillated for weeks between the two job offers.' },
+  adulterate: { def: 'to lower the quality of something by adding an inferior substance', ex: 'The supplier was fined for adulterating honey with corn syrup.', note: 'Unadulterated = pure, unmixed.' },
+  capricious: { def: 'changing mood or behavior suddenly and without reason', ex: 'The capricious ruler pardoned a thief on Monday and jailed a poet on Tuesday.' },
+  engender: { def: 'to cause or give rise to (a feeling or situation)', ex: 'Secretive decisions tend to engender suspicion among employees.' },
+  homogeneous: { def: 'made up of parts or members of the same kind', ex: 'The town was once culturally homogeneous, but it has grown far more diverse.', note: '\u201CHomogenous\u201D is a common variant spelling. Opposite: heterogeneous.' },
+  loquacious: { def: 'very talkative', ex: 'The loquacious driver narrated every mile of the three-hour trip.' },
+  pragmatic: { def: 'dealing with problems sensibly and practically rather than by theory', ex: 'Instead of arguing about ideals, the pragmatic negotiators focused on what both sides could accept.' },
+  volatile: { def: 'liable to change rapidly and unpredictably', ex: 'Fuel prices stayed volatile throughout the year.', note: 'Also: (of a temper) explosive; (in chemistry) evaporating easily.' },
+  apathy: { def: 'lack of interest, enthusiasm or concern', ex: 'Low turnout suggested widespread apathy about the local election.', note: 'Adjective: apathetic.' },
+  corroborate: { def: 'to confirm or support with additional evidence', ex: 'Security footage corroborated the guard\u2019s account of the break-in.' },
+  ephemeral: { def: 'lasting a very short time', ex: 'Snow sculptures are ephemeral art; most melt within a week.' },
+  laconic: { def: 'using very few words', ex: 'Asked how the exam went, he gave a laconic \u201CFine.\u201D', note: 'Laconic stresses few words; taciturn = habitually silent; reticent = reluctant to reveal thoughts; pithy = brief and forceful. Memory aid: from Laconia, the region of ancient Sparta, whose people were known for terse replies.' },
+  mitigate: { def: 'to make less severe, serious or harmful', ex: 'Planting trees along the river helped mitigate flood damage.' },
+  propriety: { def: 'conformity to accepted standards of correct behavior', ex: 'The judge questioned the propriety of a lawyer accepting gifts from a witness.' },
+  advocate: { def: '(verb) to publicly support or recommend', ex: 'Doctors advocate regular exercise for patients of every age.', note: 'Also a noun: an advocate is a supporter or a lawyer.' },
+  cacophony: { def: 'a harsh, jarring mixture of sounds', ex: 'A cacophony of alarms, sirens and shouting filled the street.', note: 'Opposite: euphony.' },
+  enervate: { def: 'to drain of energy; weaken', ex: 'The humid heat enervated the hikers long before they reached the summit.', note: 'Trap: it does NOT mean \u201Cenergize\u201D \u2014 it means the opposite.' },
+  ingenuous: { def: 'innocent, trusting and candid, sometimes naively so', ex: 'The ingenuous intern believed every rumor she heard in the break room.', note: 'Do not confuse: disingenuous = insincere; ingenious = clever.' },
+  misanthrope: { def: 'a person who dislikes or distrusts people in general', ex: 'The novel\u2019s hero is a misanthrope who slowly learns to trust his neighbors.', note: 'Opposite: philanthropist.' },
+  paradox: { def: 'a statement or situation that seems self-contradictory yet may be true', ex: 'It is a paradox that adding a new road can make traffic worse.' },
+  venerate: { def: 'to regard with deep respect', ex: 'Many cultures venerate their elders as keepers of wisdom.' },
+  antipathy: { def: 'a strong feeling of dislike', ex: 'His antipathy toward cats dated back to a childhood scratch.' },
+  deride: { def: 'to mock or treat with contempt', ex: 'Critics derided the invention as a toy, but it later reshaped the industry.', note: 'Noun: derision. Adjective: derisive.' },
+  eulogy: { def: 'a speech or text praising someone, especially at a funeral', ex: 'His daughter\u2019s eulogy made the mourners laugh and cry.', note: 'Do not confuse with elegy, a mournful poem.' },
+  lethargic: { def: 'sluggish; lacking energy', ex: 'The flu left him lethargic for days.', note: 'Noun: lethargy.' },
+  obdurate: { def: 'stubbornly refusing to change an opinion or course', ex: 'The obdurate official would not approve the permit despite a petition with thousands of signatures.' },
+  philanthropic: { def: 'generously promoting the welfare of others, especially through donations', ex: 'Her philanthropic foundation funds scholarships for rural students.', note: 'Opposite in spirit: misanthropic.' },
+  waver: { def: 'to be undecided; to go back and forth', ex: 'His support for the plan never wavered, even when the costs doubled.' },
+  bolster: { def: 'to support or strengthen', ex: 'New data bolstered the case for a later school start time.' },
+  dissonance: { def: 'lack of harmony; disagreement or conflict', ex: 'There was obvious dissonance between the company\u2019s green slogans and its pollution record.', note: 'Cognitive dissonance: discomfort from holding conflicting beliefs.' },
+  garrulous: { def: 'excessively talkative, especially about trivial things', ex: 'The garrulous neighbor turned a quick hello into an hour-long chat.' },
+  malleable: { def: 'easily shaped or influenced', ex: 'Gold is so malleable that it can be hammered into sheets thinner than paper.' },
+  ostentation: { def: 'a showy display of wealth or importance meant to impress', ex: 'The couple avoided ostentation, holding a small wedding in their garden.', note: 'Adjective: ostentatious.' },
+  prevaricate: { def: 'to speak evasively; to avoid telling the whole truth', ex: 'When asked where the money had gone, the treasurer prevaricated.' },
+};
+
+export const WORDS = GROUPS.flatMap((g) => g.words.map((w) => ({ ...w, group: g.id, pos: g.pos, meaning: g.meaning, idn: g.idn, ...(TOP52[w.word] ? { top52: true, ...TOP52[w.word] } : {}) })));
+export const TOP52_WORDS = WORDS.filter((w) => w.top52);
 export const WORD_BY = Object.fromEntries(WORDS.map((w) => [w.word, w]));
 
 const fill = (frame, word) => frame.replace('{1}', `<b>${word}</b>`);
-export const exampleFor = (w) => fill(GROUP_BY_ID[w.group].frames[0].text, w.word);
+export const exampleFor = (w) => (w.ex ? w.ex.replace(new RegExp(`\\b(${w.word.replace(/e$/, '')}\\w*)`, 'i'), '<b>$1</b>') : fill(GROUP_BY_ID[w.group].frames[0].text, w.word));
 export const synonymsOf = (w) => GROUP_BY_ID[w.group].words.map((x) => x.word).filter((x) => x !== w.word);
 export const antonymsOf = (w) => { const o = GROUP_BY_ID[w.group].opp; return o ? GROUP_BY_ID[o].words.map((x) => x.word) : []; };
 
-/** Eight words per day (30 days cover every tier-2+ word); easier words come first. */
-export const WORDS_PER_DAY = 8;
-// Tier-1 words are everyday English kept only as synonyms; the daily list teaches tier 2+.
-const ORDERED = WORDS.filter((w) => w.tier >= 2).sort((a, b) => a.tier - b.tier || a.group.localeCompare(b.group) || a.word.localeCompare(b.word));
+
+// The Top 52 come first (days 1-7); then tier 2+ words by difficulty. Tier-1 words are everyday
+// English kept only as synonyms.
+const byTier = (a, b) => a.tier - b.tier || a.group.localeCompare(b.group) || a.word.localeCompare(b.word);
+const ORDERED = [...WORDS.filter((w) => w.top52).sort(byTier), ...WORDS.filter((w) => !w.top52 && w.tier >= 2).sort(byTier)];
+// Enough words per day that the 30-day plan introduces every teachable word once.
+export const WORDS_PER_DAY = Math.ceil(ORDERED.length / 30);
 export function wordsForDay(day) {
   const start = ((day - 1) * WORDS_PER_DAY) % ORDERED.length;
   return Array.from({ length: WORDS_PER_DAY }, (_, i) => ORDERED[(start + i) % ORDERED.length]);
@@ -243,7 +370,7 @@ export function generateVocabQuestion(type, rng, { prefer = [], target = 3 } = {
   const { g, fi, opp, far, chosen, d } = best;
   const frame = g.frames[fi];
   if (type === 'se') {
-    const groups = [...opp, ...rng.shuffle(far).filter((x) => x.words.length >= 2)].slice(0, 2);
+    const groups = [...opp, ...rng.shuffle(far)].filter((x) => x.words.length >= 2).slice(0, 2);
     const pairs = groups.map((x) => rng.shuffle(x.words).slice(0, 2).map((w) => w.word));
     const opts = rng.shuffle([...chosen.map((w) => w.word), ...pairs.flat()]);
     return {

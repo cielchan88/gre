@@ -46,7 +46,7 @@ function route() {
   if (page === 'session') return viewSession();
   if (page === 'result') return viewResult(arg);
   if (page === 'essay') return viewEssay();
-  if (page === 'vocab') { if (arg !== 'review') vr = null; return viewVocab(arg); }
+  if (page === 'vocab') { if (arg !== 'review' && arg !== 'top52') vr = null; return viewVocab(arg); }
   if (page === 'mistakes') return viewMistakes();
   if (page === 'settings') return viewSettings();
   if (page === 'about') return viewAbout();
@@ -82,10 +82,10 @@ function abilityCard(sec) {
 const POS = { adj: 'adjective', noun: 'noun', verb: 'verb' };
 function wordCard(w) {
   const syn = VOC.synonymsOf(w), ant = VOC.antonymsOf(w), v = state.vocab[w.word];
-  return `<div class="word" data-w="${w.word}"><div class="w-head"><b class="w">${w.word}</b><span class="pos">${POS[w.pos]}</span><span class="tier" title="Tingkat kesulitan ${w.tier}/5">${'\u25CF'.repeat(w.tier)}${'\u25CB'.repeat(5 - w.tier)}</span>${v ? `<span class="box b${v.box}" title="Kotak Leitner">${v.box >= 4 ? 'dikuasai' : 'kotak ' + v.box}</span>` : ''}</div>
-    <div class="w-def">${esc(w.meaning)} &middot; <i>${esc(w.idn)}</i></div>
+  return `<div class="word${w.top52 ? ' top52' : ''}" data-w="${w.word}"><div class="w-head"><b class="w">${w.word}</b><span class="pos">${POS[w.pos]}</span>${w.top52 ? '<span class="t52">Top 52</span>' : ''}<span class="tier" title="Tingkat kesulitan ${w.tier}/5">${'\u25CF'.repeat(w.tier)}${'\u25CB'.repeat(5 - w.tier)}</span>${v ? `<span class="box b${v.box}" title="Kotak Leitner">${v.box >= 4 ? 'dikuasai' : 'kotak ' + v.box}</span>` : ''}</div>
+    <div class="w-def">${esc(w.def || w.meaning)} &middot; <i>${esc(w.idn)}</i></div>
     ${syn.length ? `<div class="w-rel">Sinonim: ${syn.join(', ')}</div>` : ''}${ant.length ? `<div class="w-rel">Antonim: ${ant.join(', ')}</div>` : ''}
-    <div class="w-ex">${VOC.exampleFor(w)}</div></div>`;
+    <div class="w-ex">${VOC.exampleFor(w)}</div>${w.note ? `<div class="w-note">${esc(w.note)}</div>` : ''}</div>`;
 }
 function vocabDeck(now = Date.now()) {
   const intro = new Set();
@@ -607,12 +607,14 @@ function viewEssay() {
 let vr = null; // current flashcard run (not persisted; grades are)
 const shuffled = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 function viewVocab(arg) {
-  if (arg === 'review') return renderVocabReview();
-  if (arg === 'list') return renderVocabList();
+  if (arg === 'review') return renderVocabReview('due');
+  if (arg === 'top52') return renderVocabReview('top52');
+  if (arg?.startsWith('list')) return renderVocabList(arg.includes('top52'));
   const day = currentDay(), d = vocabDeck(), todo = d.due.length + Math.min(10, d.fresh.length);
   render(`<h1>Kosakata GRE</h1>
     <div class="tiles"><div class="tile"><b>${d.mastered}</b><span>dikuasai</span></div><div class="tile"><b>${d.intro}</b><span>sudah diperkenalkan</span></div><div class="tile"><b>${d.due.length}</b><span>jatuh tempo</span></div><div class="tile"><b>${VOC.WORDS.length}</b><span>total kata</span></div></div>
     <div class="actions">${todo ? `<a class="btn primary" href="#/vocab/review">Mulai review (${todo} kartu)</a>` : '<span class="muted">Tidak ada kartu jatuh tempo. Lanjutkan modul harian untuk membuka kata baru.</span>'}<a class="btn" href="#/vocab/list">Daftar lengkap</a></div>
+    ${top52Card()}
     <div class="card"><h3>Kosakata hari ini &mdash; Day ${day}</h3><div class="words">${VOC.wordsForDay(day).map(wordCard).join('')}</div></div>
     <div class="card prose"><h3>Cara belajar kosakata untuk GRE</h3><ul>
     <li><b>Belajar per kelompok sinonim.</b> Sentence Equivalence menuntut dua kata yang menghasilkan arti kalimat sama; kata di sini dikelompokkan seperti itu.</li>
@@ -621,12 +623,27 @@ function viewVocab(arg) {
     <li><b>Ulangi berkala.</b> Kartu yang kamu ingat muncul lagi setelah 1, 3, 7, 14, lalu 30 hari; yang lupa kembali ke awal. Kata dari soal yang salah otomatis masuk review.</li>
     <li><b>Baca teks bergaya akademik</b> (esai sains, sejarah, ekonomi). Bacaan GRE seimbang antara humaniora, ilmu sosial, dan ilmu alam.</li></ul></div>`);
 }
-function startVocabReview() {
-  const d = vocabDeck();
-  vr = { queue: [...shuffled(d.due), ...d.fresh.slice(0, 10)].slice(0, 20), i: 0, shown: false, ok: 0, again: new Set() };
+function top52Card() {
+  const now = Date.now(), ws = VOC.TOP52_WORDS;
+  const mastered = ws.filter((w) => state.vocab[w.word]?.box >= 4).length, started = ws.filter((w) => state.vocab[w.word]).length;
+  const due = ws.filter((w) => !state.vocab[w.word] || state.vocab[w.word].due <= now).length;
+  return `<div class="card t52-card"><div><h3>Top 52 GRE Words</h3><p class="muted">${mastered} dikuasai &middot; ${started} sudah dipelajari &middot; ${due} siap direview. Kata-kata ini diperkenalkan pertama (Day 1&ndash;5) dan ditandai <span class="t52">Top 52</span>.</p>
+    <div class="meter"><i style="width:${(mastered / ws.length) * 100}%"></i></div></div>
+    <div class="actions">${due ? `<a class="btn primary" href="#/vocab/top52">Review Top 52 (${Math.min(20, due)} kartu)</a>` : ''}<a class="btn" href="#/vocab/list?top52">Lihat ke-52 kata</a></div></div>`;
 }
-function renderVocabReview() {
-  if (!vr) startVocabReview();
+function startVocabReview(mode) {
+  const now = Date.now();
+  if (mode === 'top52') {
+    const ws = VOC.TOP52_WORDS.map((w) => w.word);
+    const due = ws.filter((w) => state.vocab[w] && state.vocab[w].due <= now), fresh = ws.filter((w) => !state.vocab[w]);
+    vr = { mode, queue: [...shuffled(due), ...fresh].slice(0, 20), i: 0, shown: false, ok: 0, again: new Set() };
+    return;
+  }
+  const d = vocabDeck();
+  vr = { mode, queue: [...shuffled(d.due), ...d.fresh.slice(0, 10)].slice(0, 20), i: 0, shown: false, ok: 0, again: new Set() };
+}
+function renderVocabReview(mode) {
+  if (!vr || (mode && vr.mode !== mode)) startVocabReview(mode);
   if (vr.i >= vr.queue.length) {
     const n = vr.queue.length - vr.again.size, ok = vr.ok;
     vr = null;
@@ -634,7 +651,7 @@ function renderVocabReview() {
     return;
   }
   const w = VOC.WORD_BY[vr.queue[vr.i]];
-  render(`<a class="back" href="#/vocab">&larr; Kosakata</a><div class="card flash"><div class="muted">Kartu ${vr.i + 1} / ${vr.queue.length}</div>
+  render(`<a class="back" href="#/vocab">&larr; Kosakata</a><div class="card flash"><div class="muted">${vr.mode === 'top52' ? 'Top 52 &middot; ' : ''}Kartu ${vr.i + 1} / ${vr.queue.length}</div>
     <div class="fw">${w.word}</div><div class="pos">${POS[w.pos]}</div>
     ${vr.shown ? `${wordCard(w)}<div class="actions center"><button class="btn danger" data-act="vno">Belum ingat</button><button class="btn primary" data-act="vyes">Ingat</button></div>` : '<p class="muted">Coba ingat artinya dan satu sinonimnya, lalu buka kartunya.</p><button class="btn primary big" data-act="vshow">Tampilkan arti</button>'}</div>`);
 }
@@ -644,16 +661,19 @@ function vocabGrade(ok) {
   if (ok) vr.ok++; else if (!vr.again.has(w)) { vr.again.add(w); vr.queue.push(w); }
   vr.i++; vr.shown = false;
   persist();
-  renderVocabReview();
+  renderVocabReview(vr.mode);
 }
-function renderVocabList() {
+function renderVocabList(onlyTop) {
   render(`<a class="back" href="#/vocab">&larr; Kosakata</a><h1>Daftar kosakata (${VOC.WORDS.length} kata)</h1>
-    <div class="filters"><input id="vsearch" placeholder="Cari kata atau arti (Inggris / Indonesia)" autocomplete="off"><select id="vtier"><option value="">Semua tingkat</option>${[1, 2, 3, 4, 5].map((t) => `<option value="${t}">Tingkat ${t}</option>`).join('')}</select></div>
-    <div class="words" id="vlist">${[...VOC.WORDS].sort((a, b) => a.word.localeCompare(b.word)).map((w) => wordCard(w).replace('<div class="word"', `<div class="word" data-tier="${w.tier}" data-q="${esc((w.word + ' ' + w.meaning + ' ' + w.idn).toLowerCase())}"`)).join('')}</div>`);
+    <div class="filters"><input id="vsearch" placeholder="Cari kata atau arti (Inggris / Indonesia)" autocomplete="off"><select id="vtier"><option value="">Semua tingkat</option>${[1, 2, 3, 4, 5].map((t) => `<option value="${t}">Tingkat ${t}</option>`).join('')}</select>
+    <label class="check"><input type="checkbox" id="vtop" ${onlyTop ? 'checked' : ''}> Hanya Top 52</label></div>
+    <div class="words" id="vlist">${[...VOC.WORDS].sort((a, b) => a.word.localeCompare(b.word)).map((w) => wordCard(w).replace(/^<div class="word([^"]*)"/, `<div class="word$1" data-tier="${w.tier}" data-q="${esc((w.word + ' ' + (w.def || '') + ' ' + w.meaning + ' ' + w.idn + ' ' + (w.note || '')).toLowerCase())}"`)).join('')}</div>
+    <p class="muted">Pemilihan kata Top 52 mengikuti artikel Kaplan &ldquo;Top 52 GRE Vocabulary Words&rdquo;; definisi, contoh kalimat, dan catatan ditulis ulang dengan kata-kata sendiri.</p>`);
+  filterVocab();
 }
 function filterVocab() {
-  const q = ($('#vsearch')?.value || '').trim().toLowerCase(), t = $('#vtier')?.value || '';
-  document.querySelectorAll('#vlist .word').forEach((el) => { el.hidden = (q && !el.dataset.q.includes(q)) || (t && el.dataset.tier !== t); });
+  const q = ($('#vsearch')?.value || '').trim().toLowerCase(), t = $('#vtier')?.value || '', top = $('#vtop')?.checked;
+  document.querySelectorAll('#vlist .word').forEach((el) => { el.hidden = (q && !el.dataset.q.includes(q)) || (t && el.dataset.tier !== t) || (top && !el.classList.contains('top52')); });
 }
 
 // ───────────────────────── Mistakes / Settings / About ─────────────────────────
@@ -687,7 +707,7 @@ function viewAbout() {
   <li><b>Quant:</b> Quantitative Comparison, Multiple Choice (satu jawaban), Multiple Choice (pilih semua), Numeric Entry (angka atau pecahan), dan set Data Interpretation (tabel, grafik batang, diagram lingkaran) yang dipakai untuk beberapa soal. Materi: aritmetika, aljabar, geometri, analisis data, soal cerita.</li></ul>
   <h3>Cara adaptif bekerja</h3><ul><li><b>Mock test (section-adaptive, seperti GRE asli):</b> Section 1 bertingkat menengah. Persentase poin terbobot (soal sulit bernilai lebih) menentukan Section 2: mudah, menengah, atau sulit. Batas atas skor bergantung pada tingkat Section 2.</li>
   <li><b>Modul harian (question-adaptive):</b> level kemampuanmu diperbarui setelah tiap soal dengan model Elo. Benar pada soal yang sulit menaikkan level lebih banyak; soal berikutnya dipilih dekat level itu.</li></ul>
-  <h3>Batasan yang jujur</h3><ul><li>Soal-soal di sini <b>orisinal</b> (bukan soal ETS yang berhak cipta). Soal Quant dan set Data Interpretation dihasilkan secara parametrik. Verbal memadukan ~100 soal tulisan tangan dengan soal Text Completion &amp; Sentence Equivalence yang dibangkitkan dari bank kosakata (77 kelompok sinonim, 247 kata), sehingga tidak cepat habis; passage Reading Comprehension masih terbatas (10 passage) dan akan berulang.</li>
+  <h3>Batasan yang jujur</h3><ul><li>Soal-soal di sini <b>orisinal</b> (bukan soal ETS yang berhak cipta). Soal Quant dan set Data Interpretation dihasilkan secara parametrik. Verbal memadukan ~100 soal tulisan tangan dengan soal Text Completion &amp; Sentence Equivalence yang dibangkitkan dari bank kosakata (${VOC.GROUPS.length} kelompok sinonim, ${VOC.WORDS.length} kata, termasuk daftar Top 52), sehingga tidak cepat habis; passage Reading Comprehension masih terbatas (10 passage) dan akan berulang.</li>
   <li>Skor latihan adalah estimasi; kalibrasi kesulitan soal belum diuji pada peserta nyata. Persentil yang ditampilkan memakai tabel resmi ETS, tetapi hanya seakurat estimasi skornya. Gunakan untuk memantau tren, bukan sebagai prediksi skor resmi.</li>
   <li>Untuk simulasi resmi, lengkapi dengan <i>POWERPREP</i> dari ETS.</li></ul></div>
   <div class="card prose" id="skor"><h3>Skor GRE: apa yang dianggap bagus?</h3>
@@ -761,7 +781,7 @@ document.addEventListener('click', (e) => {
     calcclose: () => { calc.open = false; $('.calc')?.remove(); },
     calckey: () => { press(el.dataset.k); const d = $('#calc-disp'); if (d) d.textContent = calcDisplay(); const mm = $('#calc-mem'); if (mm) mm.textContent = calc.mem ? 'M' : ''; },
     calcxfer: () => { const box = document.querySelector('.ne-box'); if (box && !box.disabled && !calc.err) { box.value = calc.entry; box.dispatchEvent(new Event('input', { bubbles: true })); } },
-    vshow: () => { vr.shown = true; renderVocabReview(); },
+    vshow: () => { vr.shown = true; renderVocabReview(vr.mode); },
     vyes: () => vocabGrade(true),
     vno: () => vocabGrade(false),
     essayheur: () => scoreEssayAction('heur'),
@@ -835,7 +855,7 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
-  if (e.target.id === 'vtier') filterVocab();
+  if (e.target.id === 'vtier' || e.target.id === 'vtop') filterVocab();
   if (e.target.id === 'ep-sel') { const i = Number(e.target.value); state.essayDraft = { ...(state.essayDraft || { text: '' }), idx: i }; persist(); $('#ep-prompt').textContent = E.AWA_PROMPTS[i]; }
   if (e.target.id === 'import') {
     const f = e.target.files[0];
