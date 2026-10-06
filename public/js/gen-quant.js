@@ -623,6 +623,10 @@ const DI_KINDS = {
     qs.push({ type: 'mcn', difficulty: 4, stem: `For which of the following did the figure increase by more than ${th} percent from ${y1} to ${y2}? Indicate <em>all</em> such answers.`, options: names,
       answer: mult.map((m, i) => ((m - 1) * 100 > th ? i : -1)).filter((i) => i >= 0),
       explain: `Compute each percent change: ${names.map((n, i) => `${n} ${fmt(+((mult[i] - 1) * 100).toFixed(1))}%`).join(', ')}. Those above ${th}% are correct.` });
+    const total3 = v2.reduce((sum, v, i) => sum + v * mult[i], 0);
+    qs.push({ type: 'ne', difficulty: 5, stem: `Suppose that from ${y2} to ${y2 + 3} each of the five figures changes by the same percent as it did from ${y1} to ${y2}. What would the total for all five be in ${y2 + 3}? Give your answer to the nearest whole number.`,
+      answer: { value: Math.round(total3) }, tol: nearHalf(total3) ? 0.6 : undefined,
+      explain: `Apply each row's own growth factor to its ${y2} value: ${names.map((n, i) => `${v2[i]}\u00D7${mult[i]}`).join(' + ')} = ${fmt(+total3.toFixed(2))} \u2248 ${Math.round(total3)}. Applying the overall growth rate to the total would give a different (wrong) answer.` });
     return { title: 'Data table', html, qs };
   },
   bar(r) {
@@ -647,6 +651,10 @@ const DI_KINDS = {
     const ans = Math.round(Math.abs(pc));
     qs.push({ type: 'ne', difficulty: 4, stem: `${la}'s figure for June was what percent ${word} than its figure for January? Give your answer to the nearest whole percent.`, answer: { value: ans }, tol: nearHalf(Math.abs(pc)) ? 0.6 : undefined,
       explain: `|${a[5]} − ${a[0]}| / ${a[0]} × 100 ≈ ${Math.abs(pc).toFixed(2)}%, which rounds to ${ans}%.` });
+    const tie = a.some((v) => v === mean);
+    const cnt = a.filter((v) => (tie ? v >= mean : v > mean)).length;
+    qs.push({ type: 'ne', difficulty: 5, stem: `For how many of the six months was ${la}'s figure ${tie ? 'greater than or equal to' : 'greater than'} the average (arithmetic mean) monthly figure for ${lb}?`, answer: { value: cnt },
+      explain: `${lb}'s mean is ${fmt(+mean.toFixed(2))}. ${la}'s values are ${a.join(', ')}; ${cnt} of them are ${tie ? 'at least' : 'above'} that mean.` });
     return { title: 'Graph', html, qs };
   },
   pie(r) {
@@ -676,11 +684,17 @@ const DI_KINDS = {
     qs.push({ type: 'mcn', difficulty: 4, stem: `Next year the total budget will increase by ${inc} percent, and each category will keep the same percent of the total. Which categories will then receive more than $${fmt(+cut.toFixed(2))} million? Indicate <em>all</em> such categories.`, options: cats,
       answer: amts.map((v, n) => (v > cut ? n : -1)).filter((n) => n >= 0),
       explain: `New total = $${fmt(T2)} million. Amounts: ${cats.map((ct, n) => `${ct} ${fmt(+amts[n].toFixed(2))}`).join(', ')}.` });
+    const c5 = r.int(1, 4);
+    let Z = 2, share = 0;
+    for (const z of r.shuffle([2, 4, 5, 6, 10])) { Z = z; share = (((T * pcts[c5]) / 100 + z) / (T + z)) * 100; if (!nearHalf(share)) break; }
+    qs.push({ type: 'ne', difficulty: 5, stem: `If an additional $${Z} million were added to the budget and all of it went to ${cats[c5]}, what percent of the new total budget would ${cats[c5]} receive? Give your answer to the nearest whole percent.`,
+      answer: { value: Math.round(share) }, tol: nearHalf(share) ? 0.6 : undefined,
+      explain: `${cats[c5]} would get ${fmt((T * pcts[c5]) / 100)} + ${Z} = ${fmt((T * pcts[c5]) / 100 + Z)} million out of ${T + Z} million: ${share.toFixed(2)}% \u2248 ${Math.round(share)}%.` });
     return { title: 'Graph', html, qs };
   },
 };
 
-/** Generate a Data Interpretation set (3 questions sharing one table/graph). */
+/** Generate a Data Interpretation set: 4 questions (difficulty 2-5) sharing one table/graph; tests use 2-3 of them. */
 export function generateDISet(seed) {
   const r = makeRng(seed);
   const kind = r.pick(Object.keys(DI_KINDS));
