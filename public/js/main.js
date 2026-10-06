@@ -5,6 +5,7 @@ import { calc, press, calcHtml, display as calcDisplay } from './ui-calc.js';
 import { estimateEssay } from './essay-score.js';
 import * as SC from './scores.js';
 import * as VOC from './vocab.js';
+import { strategyFor, STRATEGIES } from './strategy.js';
 import { DIFF_LABEL, TOPIC_LABEL, TYPE_LABEL } from './consts.js';
 
 let state = store.load();
@@ -197,7 +198,7 @@ function renderPractice() {
     const lv = E.levelOf(item.thetaAfter ?? 0), lb = E.levelOf(item.thetaBefore);
     const move = s.fixed ? '' : lv > lb ? `<span class="up">▲ Naik ke level ${DIFF_LABEL[lv]} &mdash; soal berikutnya lebih sulit</span>` : lv < lb ? `<span class="down">▼ Turun ke level ${DIFF_LABEL[lv]} &mdash; soal berikutnya lebih mudah</span>` : `<span class="flat">Level ${delta >= 0 ? 'menguat' : 'melemah'} (${item.thetaAfter.toFixed(2)})</span>`;
     fb = `<div class="feedback ${item.correct ? 'ok' : 'bad'}"><h4>${item.correct ? '✔ Benar' : '✘ Kurang tepat'} ${move}</h4>
-      ${item.correct ? '' : `<p><b>Jawabanmu:</b> ${responseText(q, item.resp)}<br><b>Jawaban benar:</b> ${correctAnswerText(q)}</p>`}<p class="expl">${q.explain || ''}</p></div>`;
+      ${item.correct ? '' : `<p><b>Jawabanmu:</b> ${responseText(q, item.resp)}<br><b>Jawaban benar:</b> ${correctAnswerText(q)}</p>`}<p class="expl">${q.explain || ''}</p>${(() => { const st = strategyFor(q); return `<p class="strat"><b>\uD83D\uDCA1 Strategi: ${st.name}.</b> ${st.tip}</p>`; })()}</div>`;
   }
   const last = s.cursor + 1 >= (s.fixed ? s.items.length : E.PRACTICE_SIZE.V + E.PRACTICE_SIZE.Q);
   render(`<div class="testbar"><div><b>${title}</b> &middot; ${secName(q.section)}</div><div>Soal ${inSec} / ${secTotal}</div><div class="clock" id="clock">00:00</div></div>${level}
@@ -504,7 +505,7 @@ function reviewList(items) {
   if (!items) return '<p class="muted">Detail soal sudah dihapus untuk hasil lama (hanya 12 hasil terakhir disimpan lengkap).</p>';
   return `<div class="filter"><button class="btn small active" data-act="filter" data-f="all">Semua (${items.length})</button><button class="btn small" data-act="filter" data-f="bad">Salah (${items.filter((i) => !i.correct).length})</button></div>
   <div id="rvlist">${items.map((it, i) => `<details class="rv ${it.correct ? 'ok' : 'bad'}"><summary><span class="n">${i + 1}</span><span class="t">${typeLabel(it.q)}</span><span class="d">${DIFF_LABEL[it.q.difficulty]}</span><span class="r">${it.correct ? '✔' : it.resp == null ? '—' : '✘'}</span></summary>
-    ${renderQuestion(it.q, it.resp, { locked: true, show: true })}<div class="expl"><p><b>Jawabanmu:</b> ${responseText(it.q, it.resp)}<br><b>Jawaban benar:</b> ${correctAnswerText(it.q)}</p><p>${it.q.explain || ''}</p></div></details>`).join('')}</div>`;
+    ${renderQuestion(it.q, it.resp, { locked: true, show: true })}<div class="expl"><p><b>Jawabanmu:</b> ${responseText(it.q, it.resp)}<br><b>Jawaban benar:</b> ${correctAnswerText(it.q)}</p><p>${it.q.explain || ''}</p><p class="strat"><b>\uD83D\uDCA1 ${strategyFor(it.q).name}:</b> ${strategyFor(it.q).tip}</p></div></details>`).join('')}</div>`;
 }
 function topicBars(topics) {
   const rows = Object.entries(topics).sort((a, b) => a[1].c / a[1].n - b[1].c / b[1].n);
@@ -710,6 +711,14 @@ function viewAbout() {
   <h3>Batasan yang jujur</h3><ul><li>Soal-soal di sini <b>orisinal</b> (bukan soal ETS yang berhak cipta). Soal Quant dan set Data Interpretation dihasilkan secara parametrik. Verbal memadukan ~100 soal tulisan tangan dengan soal Text Completion &amp; Sentence Equivalence yang dibangkitkan dari bank kosakata (${VOC.GROUPS.length} kelompok sinonim, ${VOC.WORDS.length} kata, termasuk daftar Top 52), sehingga tidak cepat habis; passage Reading Comprehension masih terbatas (10 passage) dan akan berulang.</li>
   <li>Skor latihan adalah estimasi; kalibrasi kesulitan soal belum diuji pada peserta nyata. Persentil yang ditampilkan memakai tabel resmi ETS, tetapi hanya seakurat estimasi skornya. Gunakan untuk memantau tren, bukan sebagai prediksi skor resmi.</li>
   <li>Untuk simulasi resmi, lengkapi dengan <i>POWERPREP</i> dari ETS.</li></ul></div>
+  <div class="card prose" id="strategi"><h3>Strategi mengerjakan soal</h3>
+  <ul>${Object.values(STRATEGIES).map((st) => `<li><b>${st.name}.</b> ${st.tip}</li>`).join('')}</ul>
+  <h4>Pacing di GRE versi sekarang</h4>
+  <ul><li>Tes adaptif <b>per section</b>: di dalam satu section semua soal bernilai sama, dan kamu boleh melompat, menandai (Mark), lalu kembali. Kerjakan dulu soal yang mudah, tandai yang sulit.</li>
+  <li><b>Tidak ada pengurangan nilai</b> untuk jawaban salah. Jangan pernah meninggalkan soal kosong; sisakan ~1 menit di akhir section untuk menebak sisa soal.</li>
+  <li>Section 1 menentukan tingkat Section 2. Akurasi di Section 1 tetap penting, tetapi jangan menghabiskan 5 menit untuk satu soal.</li>
+  <li>Gunakan kertas coretan: untuk Verbal, catat status tiap pilihan (\u2713 \u2717 ~ ?); untuk Quant, tulis langkah agar mudah dicek ulang.</li></ul>
+  <p class="muted"><b>Hati-hati dengan buku persiapan lama (sebelum 2011).</b> Saran seperti &ldquo;10 soal pertama paling menentukan skor&rdquo; atau &ldquo;tidak bisa kembali ke soal sebelumnya&rdquo; berlaku untuk GRE lama yang adaptif per soal. Soal Analogies dan Antonyms, skala 200&ndash;800, section eksperimen, dan esai Argument juga sudah tidak ada di tes sekarang.</p></div>
   <div class="card prose" id="skor"><h3>Skor GRE: apa yang dianggap bagus?</h3>
   <p>Yang menentukan &ldquo;bagus&rdquo; adalah <b>persentil</b> (persen peserta yang skornya di bawahmu) dan <b>standar program tujuan</b>, bukan angka mentahnya. Data di bawah adalah data resmi ETS.</p>
   <table class="data"><tr><th>Skor</th><th>Persentil Verbal</th><th>Persentil Quant</th></tr>${[170, 165, 160, 155, 150, 145, 140, 135].map((x) => `<tr><td>${x}</td><td>${SC.percentile('V', x)}</td><td>${SC.percentile('Q', x)}</td></tr>`).join('')}</table>

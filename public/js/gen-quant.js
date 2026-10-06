@@ -549,6 +549,108 @@ export const GENERATORS = [
     return { stem: `${m1} identical machines, working at the same constant rate, produce ${w} widgets in ${h1} hours. How many hours would it take ${m2} of these machines to produce ${target} widgets?`, answer: { value: target / (k * m2) },
       explain: `Each machine makes ${k} widgets/hour, so ${m2} machines make ${k * m2}/hour. Time = ${target}/${k * m2} = ${target / (k * m2)} hours.` };
   } },
+
+  // ───────── Classic drill patterns (original items; ideas common to GRE prep books) ─────────
+  { id: 'digit_reverse', topic: 'arithmetic', type: 'mcn', strategy: 'plug', make(r, d) {
+    const three = d >= 3;
+    const opts = three ? [3, 4, 6, 9, 11, 18] : [2, 3, 5, 9, 11, 18];
+    const base = three ? 99 : 9;
+    const answer = opts.map((v, i) => (base % v === 0 ? i : -1)).filter((i) => i >= 0);
+    let n, m;
+    if (three) { const a = r.int(2, 9), b = r.int(0, 9), c = r.int(1, a - 1); n = 100 * a + 10 * b + c; m = 100 * c + 10 * b + a; }
+    else { const a = r.int(2, 9), b = r.int(1, a - 1); n = 10 * a + b; m = 10 * b + a; }
+    return { stem: three
+      ? 'A three-digit integer has different hundreds and units digits, and neither is zero. A new integer is formed by swapping its hundreds and units digits. The positive difference between the two integers must be divisible by which of the following? Indicate <em>all</em> such numbers.'
+      : 'A two-digit integer has two different nonzero digits. A new integer is formed by reversing its digits. The positive difference between the two integers must be divisible by which of the following? Indicate <em>all</em> such numbers.',
+      options: opts.map(String), answer,
+      explain: three
+        ? `Write the integer as 100a + 10b + c; the swap is 100c + 10b + a. Their difference is 99(a − c), always a multiple of 99 = 9 × 11, hence also of 3. Whether it is divisible by 4, 6 or 18 depends on a − c. Plug in to check: ${n} − ${m} = ${n - m}.`
+        : `Write the integer as 10a + b; the reversal is 10b + a. Their difference is 9(a − b), always a multiple of 9 and of 3. Since a − b is between 1 and 8, it is never a multiple of 11. Plug in to check: ${n} − ${m} = ${n - m}.` };
+  } },
+
+  { id: 'qc_products', topic: 'arithmetic', type: 'qc', strategy: 'compare', make(r, d) {
+    const K = 1000;
+    let a, c, b, e;
+    do { a = r.int(12, 49); c = r.int(12, 49); b = r.int(11, 99); e = r.int(101, 999); } while (a === c);
+    const A = BigInt(a * K + b) * BigInt(c * K + e), B = BigInt(a * K + e) * BigInt(c * K + b);
+    const f = (x) => x.toLocaleString('en-US');
+    return { qa: `${f(a * K + b)} × ${f(c * K + e)}`, qb: `${f(a * K + e)} × ${f(c * K + b)}`, answer: A > B ? 0 : A < B ? 1 : 2,
+      explain: `Don’t multiply. With K = 1,000: A = (${a}K + ${b})(${c}K + ${e}) and B = (${a}K + ${e})(${c}K + ${b}). Both products share ${a}·${c}K² and ${b}·${e}, so only the cross terms differ: A − B = K(${a} − ${c})(${e} − ${b}), which is ${A > B ? 'positive' : 'negative'}. ${A > B ? 'A' : 'B'} is greater.` };
+  } },
+
+  { id: 'stars_bars', topic: 'data', type: 'ne', make(r, d) {
+    const C = (n, k) => { let x = 1; for (let i = 1; i <= k; i++) x = (x * (n - k + i)) / i; return Math.round(x); };
+    const N = r.int(7, 15);
+    if (d <= 3) return { stem: `How many ordered pairs (x, y) of positive integers satisfy x + y = ${N}?`, answer: { value: N - 1 },
+      explain: `x can be any integer from 1 to ${N - 1}, and then y is determined: ${N - 1} pairs.` };
+    const pos = d === 4 || r.chance(0.5);
+    const ans = pos ? C(N - 1, 2) : C(N + 2, 2);
+    return { stem: `How many ordered triples (x, y, z) of ${pos ? 'positive' : 'nonnegative'} integers satisfy x + y + z = ${N}?`, answer: { value: ans },
+      explain: pos
+        ? `Picture ${N} identical units in a row; placing 2 dividers in the ${N - 1} gaps splits them into three positive parts. That gives C(${N - 1}, 2) = ${ans}.`
+        : `Arrange ${N} units and 2 dividers in a row (parts may be empty): choose positions for the 2 dividers among ${N + 2} spots, C(${N + 2}, 2) = ${ans}.` };
+  } },
+
+  { id: 'exp_tower', topic: 'algebra', type: 'mc1', make(r, d) {
+    const [b, k] = d >= 5 ? r.pick([[2, 3], [3, 2]]) : d >= 3 ? r.pick([[2, 2], [3, 2]]) : r.pick([[2, 1], [3, 1]]);
+    const x = b ** k, good = k * x;
+    const c = numChoices(r, good, [x, k + x, 2 * x, x * x, good + k, good - k], (n) => sup(b, n));
+    return { stem: `If x = ${k === 1 ? b : sup(b, k)}, what is the value of x<sup>x</sup>?`, options: c.options, answer: c.answer,
+      explain: `x = ${x}, so x<sup>x</sup> = (${b}<sup>${k}</sup>)<sup>${x}</sup> = ${b}<sup>${k}·${x}</sup> = ${sup(b, good)}. When a power is raised to a power, multiply the exponents.` };
+  } },
+
+  { id: 'ratio_min', topic: 'arithmetic', type: 'ne', strategy: 'pita', make(r, d) {
+    let p;
+    do { p = [r.int(2, 9), r.int(2, 9), r.int(2, 9)]; } while (new Set(p).size < 3);
+    const s = p[0] + p[1] + p[2];
+    let N;
+    do { N = r.int(s + 1, s * 6); } while (d >= 3 && N % s === 0);
+    const k = Math.ceil(N / s);
+    return { stem: `A choir has sopranos, altos, and tenors in the ratio ${p.join(' : ')}. If the choir must have at least ${N} members and the ratio must be kept exactly, what is the least possible number of tenors?`, answer: { value: p[2] * k },
+      explain: `Members come in complete blocks of ${p.join(' + ')} = ${s}. The smallest multiple of ${s} that is at least ${N} is ${s * k} (${k} blocks), so there are ${p[2]} × ${k} = ${p[2] * k} tenors. A common trap is to stop at ${N} instead of rounding up to a whole block.` };
+  } },
+
+  { id: 'meet_before', topic: 'word', type: 'ne', strategy: 'trap', make(r, d) {
+    let v1, v2, t;
+    do { v1 = 10 * r.int(3, 8); v2 = 10 * r.int(3, 8); t = r.pick([12, 15, 18, 20, 30, 36, 45]); } while (((v1 + v2) * t) % 60 !== 0);
+    const D = (v1 + v2) * r.int(2, 4) + 10 * r.int(1, 5);
+    const ans = ((v1 + v2) * t) / 60;
+    return { stem: `Two cars that are ${D} miles apart drive straight toward each other, one at a constant ${v1} miles per hour and the other at a constant ${v2} miles per hour. How many miles apart are they ${t} minutes before they meet?`, answer: { value: ans },
+      explain: `Run the clock backward from the moment they meet: together they close the gap at ${v1} + ${v2} = ${v1 + v2} mph, so ${t} minutes before meeting they are ${v1 + v2} × ${t}/60 = ${ans} miles apart. The starting distance of ${D} miles is a distractor.` };
+  } },
+
+  { id: 'prime_pair', topic: 'data', type: 'ne', make(r, d) {
+    const L = d <= 3 ? 10 : r.pick([12, 14, 20]);
+    const P = [2, 3, 5, 7, 11, 13, 17, 19].filter((p) => p < L);
+    const isPrime = (n) => n > 1 && [...Array(Math.floor(Math.sqrt(n))).keys()].every((i) => i < 1 || n % (i + 1) !== 0);
+    const ev = r.pick(d <= 3 ? ['notprime', 'even'] : ['notprime', 'even', 'odd']);
+    const pairs = [];
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) pairs.push([P[i], P[j]]);
+    const test = { notprime: ([a, b]) => !isPrime(a + b), even: ([a, b]) => (a + b) % 2 === 0, odd: ([a, b]) => (a * b) % 2 === 1 }[ev];
+    const hits = pairs.filter(test).length;
+    const { num, den } = reduceFrac(hits, pairs.length);
+    const what = { notprime: 'their sum is NOT a prime number', even: 'their sum is even', odd: 'their product is odd' }[ev];
+    return { stem: `Two different numbers are chosen at random from the prime numbers less than ${L}. What is the probability that ${what}? (Enter your answer as a fraction.)`, answer: { num, den, value: num / den }, fraction: true,
+      explain: `The primes are ${P.join(', ')}, giving ${pairs.length} equally likely pairs. ${ev === 'notprime' ? 'Sums: ' + pairs.map(([a, b]) => `${a + b}`).join(', ') + '. ' : ''}${hits} of them qualify, so P = ${hits}/${pairs.length} = ${num}/${den}.${ev !== 'notprime' ? ' Key idea: 2 is the only even prime, so the outcome depends on whether 2 is chosen.' : ''}` };
+  } },
+
+  { id: 'avg_expr', topic: 'algebra', type: 'qc', strategy: 'compare', make(r, d) {
+    const vars = ['a', 'b', 'c', 'd'], m = r.int(3, 12), lam = r.int(1, 3);
+    const coef = vars.map(() => { const col = [r.int(-3, 5), r.int(-3, 5), r.int(-3, 5)]; col.push(lam - col.reduce((x, y) => x + y, 0)); return col; });
+    const consts = [r.int(-30, 30), r.int(-30, 30), r.int(-30, 30), r.int(-30, 30)];
+    const kappa = consts.reduce((x, y) => x + y, 0);
+    const exprs = [0, 1, 2, 3].map((e) => {
+      let s = '';
+      vars.forEach((v, j) => { const c = coef[j][e]; if (!c) return; s += (s ? (c < 0 ? ' − ' : ' + ') : c < 0 ? '−' : '') + (Math.abs(c) === 1 ? '' : Math.abs(c)) + v; });
+      const k = consts[e];
+      if (k) s += s ? signed(k) : fmt(k);
+      return s || '0';
+    });
+    const B = (lam * 4 * m + kappa) / 4;
+    const A = d >= 5 && r.chance(0.5) ? B : B + r.pick([-1, 1]) * r.pick([0.25, 0.5, 1, 2]);
+    return { info: `The average (arithmetic mean) of a, b, c, and d is ${m}.`, qa: fmt(A), qb: `The average of ${exprs.join(', ')}`, answer: A > B ? 0 : A < B ? 1 : 2,
+      explain: `You can’t find a, b, c, d individually, so work with the sum: a + b + c + d = ${4 * m}. Adding the four expressions, each variable’s coefficients total ${lam}, so the sum is ${lam}(a + b + c + d) ${signed(kappa).trim()} = ${lam * 4 * m + kappa}, and the average is ${fmt(B)}. Compared with ${fmt(A)}, ${A > B ? 'A is greater' : A < B ? 'B is greater' : 'they are equal'}.` };
+  } },
 ];
 
 const BY_ID = Object.fromEntries(GENERATORS.map((g) => [g.id, g]));
@@ -598,7 +700,57 @@ function pieChart(title, cats, pcts) {
     <div class="legend col">${cats.map((c, i) => `<span><i style="background:${PIE_COLORS[i]}"></i>${c}: ${pcts[i]}%</span>`).join('')}</div></figure>`;
 }
 
+
+function lineChart(title, years, vals, unit) {
+  const W = 380, H = 220, x0 = 46, y0 = 190, top = 16, max = 30, sc = (y0 - top) / max, step = (W - x0 - 16) / (years.length - 1);
+  let g = '';
+  for (let v = 0; v <= max; v += 5) {
+    const y = y0 - v * sc;
+    g += `<line x1="${x0}" x2="${W - 10}" y1="${y}" y2="${y}" class="grid${v % 10 ? ' minor' : ''}"/>`;
+    if (v % 10 === 0) g += `<text x="${x0 - 6}" y="${y + 4}" text-anchor="end">${v}</text>`;
+  }
+  const pts = vals.map((v, i) => [x0 + i * step, y0 - v * sc]);
+  g += `<polyline points="${pts.map((p) => p.join(',')).join(' ')}" fill="none" stroke="#3b6fd8" stroke-width="2.5"/>`;
+  g += pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5" fill="#3b6fd8"/>`).join('');
+  g += years.map((yr, i) => `<text x="${x0 + i * step}" y="${y0 + 16}" text-anchor="middle">${String(yr).slice(2)}</text>`).join('');
+  return `<figure class="chart"><figcaption>${title}</figcaption><svg viewBox="0 0 ${W} ${H + 10}" role="img">${g}</svg><p class="fig-note">${unit}. Years shown as ’15–’23. Graph drawn to scale.</p></figure>`;
+}
+
 const DI_KINDS = {
+  line(r) {
+    const years = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
+    let v, inc;
+    do {
+      v = [r.int(4, 14)];
+      for (let i = 1; i < 9; i++) v.push(Math.max(2, Math.min(29, v[i - 1] + r.int(-4, 5))));
+      inc = v.map((x, i) => (i ? x - v[i - 1] : -99));
+    } while (v.filter((x) => x === Math.max(...v)).length > 1 || inc.filter((x) => x === Math.max(...inc)).length > 1 || v[0] === v[8]);
+    const what = r.pick(['Membership of a hiking club', 'Number of registered volunteers', 'Enrollment in an evening language school']);
+    const html = lineChart(`${what}, 2015–2023`, years, v, 'Vertical axis: hundreds of people');
+    const qs = [];
+    const top = v.indexOf(Math.max(...v));
+    const yo = r.shuffle(years.filter((_, i) => i !== top)).slice(0, 4).concat(years[top]).sort((a, b) => a - b);
+    qs.push({ type: 'mc1', difficulty: 1, stem: 'In which year was the figure highest?', options: yo.map(String), answer: yo.indexOf(years[top]), explain: `The highest point is ${years[top]} (${v[top] * 100}).` });
+    const j = inc.indexOf(Math.max(...inc));
+    const yj = r.shuffle(years.slice(1).filter((y) => y !== years[j])).slice(0, 4).concat(years[j]).sort((a, b) => a - b);
+    qs.push({ type: 'mc1', difficulty: 2, stem: 'In which year was the increase over the previous year the greatest?', options: yj.map(String), answer: yj.indexOf(years[j]),
+      explain: `Year-over-year changes: ${years.slice(1).map((y, i) => `${y}: ${inc[i + 1] >= 0 ? '+' : ''}${inc[i + 1] * 100}`).join(', ')}. The largest increase is in ${years[j]}. Look for the steepest upward segment.` });
+    const a = r.int(0, 4), b = a + 4;
+    const mean = (v.slice(a, b + 1).reduce((x, y) => x + y, 0) / 5) * 100;
+    const m = Math.round(mean / 50) * 50;
+    const c = numChoices(r, m, [m - 400, m - 200, m + 200, m + 400, m + 600]);
+    qs.push({ type: 'mc1', difficulty: 3, stem: `Approximately what was the average (arithmetic mean) figure for the years ${years[a]} through ${years[b]}, inclusive?`, options: c.options, answer: c.answer,
+      explain: `Read the five values (${v.slice(a, b + 1).map((x) => x * 100).join(', ')}), add them and divide by 5: about ${Math.round(mean)}. Ballpark: the answer must lie between the lowest and highest of the five points.` });
+    const above = v.filter((x) => x > v.reduce((p, q) => p + q, 0) / 9).length;
+    const avg9 = (v.reduce((p, q) => p + q, 0) / 9) * 100;
+    const tie = v.some((x) => x * 100 === avg9);
+    qs.push({ type: 'ne', difficulty: 4, stem: `In how many of the nine years was the figure ${tie ? 'greater than or equal to' : 'greater than'} the average figure for all nine years?`, answer: { value: tie ? v.filter((x) => x * 100 >= avg9).length : above },
+      explain: `The nine values sum to ${v.reduce((p, q) => p + q, 0) * 100}, so the average is about ${avg9.toFixed(1)}. Count the points above that level: ${tie ? v.filter((x) => x * 100 >= avg9).length : above}.` });
+    const pc = ((v[8] - v[0]) / v[0]) * 100;
+    qs.push({ type: 'ne', difficulty: 5, stem: `By what percent did the figure ${pc > 0 ? 'increase' : 'decrease'} from 2015 to 2023? Give your answer to the nearest whole percent.`, answer: { value: Math.round(Math.abs(pc)) }, tol: nearHalf(Math.abs(pc)) ? 0.6 : undefined,
+      explain: `|${v[8] * 100} − ${v[0] * 100}| ÷ ${v[0] * 100} × 100 ≈ ${Math.abs(pc).toFixed(2)}%, which rounds to ${Math.round(Math.abs(pc))}%. Percent change is always measured from the starting value.` });
+    return { title: 'Graph', html, qs };
+  },
   table(r) {
     const [unit, names] = r.pick([
       ['Enrollment (number of students)', ['Biology', 'Chemistry', 'Economics', 'History', 'Physics']],

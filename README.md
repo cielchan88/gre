@@ -36,6 +36,11 @@ Untuk HTTPS/domain, letakkan reverse proxy (Caddy/nginx) di depan `127.0.0.1:888
 - **Bank kosakata:** 344 kata GRE dalam 109 kelompok sinonim (definisi Inggris + arti Indonesia, sinonim, antonim, contoh kalimat), termasuk daftar **Top 52** (pilihan kata mengikuti artikel Kaplan; definisi, contoh, dan catatan ditulis ulang) yang diajarkan pertama dan punya dek review sendiri. Dipakai untuk: 11 kata per hari di modul harian (30 hari mencakup semua kata), review kartu (Leitner 1/3/7/14/30 hari), dan soal Text Completion / Sentence Equivalence yang dibangkitkan otomatis (pasangan sinonim jebakan diambil dari kelompok lain).
 - **Skor:** persentil memakai tabel resmi ETS (*GRE Guide to the Use of Scores*, data Juli 2022–Juni 2025), termasuk rata-rata per bidang studi dan SEM. Target skor / bidang studi bisa diatur di Pengaturan.
 
+## Strategi & pola soal klasik
+- Setelah tiap soal latihan (dan di pembahasan) muncul tip strategi yang sesuai: Plugging In, Plug In the Answers, Ballparking, bandingkan-jangan-hitung (QC), jawaban jebakan, POE, serta pendekatan TC/SE/RC/Data Interpretation. Ringkasannya ada di halaman Panduan, termasuk saran pacing untuk GRE versi sekarang dan peringatan tentang saran usang dari buku persiapan lama.
+- Generator Quant tambahan untuk pola klasik: selisih bilangan dibalik, perbandingan hasil kali besar tanpa menghitung, banyaknya solusi bilangan bulat, pangkat bertingkat, rasio minimum, jarak sebelum bertemu, peluang pasangan bilangan prima, rata-rata ekspresi; plus set Data Interpretation grafik garis.
+- Verbal tambahan: 3 passage baru (kritik sastra, ilmu sosial, ekologi) dan soal TC/SE baru. Semua soal orisinal; tidak ada soal yang disalin dari buku persiapan.
+
 ## Cara kerja
 - **Adaptif (modul harian):** level kemampuan (skala 1–5) diperbarui tiap soal dengan model Elo; benar → soal berikutnya lebih sulit, salah → lebih mudah. Soal yang pernah salah muncul lagi lebih cepat.
 - **Adaptif (mock):** Section 1 menengah; skor terbobot kesulitan menentukan Section 2 (mudah/menengah/sulit) dan batas atas skor, seperti GRE asli.
