@@ -93,7 +93,7 @@ const server = http.createServer((req, res) => {
     const headers = {
       ...SECURITY_HEADERS,
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-store, must-revalidate',
       ETag: `"${st.size}-${Math.floor(st.mtimeMs)}"`,
       Vary: 'Accept-Encoding',
     };

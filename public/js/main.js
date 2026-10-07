@@ -8,6 +8,7 @@ import * as VOC from './vocab.js';
 import { strategyFor, STRATEGIES } from './strategy.js';
 import { DIFF_LABEL, TOPIC_LABEL, TYPE_LABEL } from './consts.js';
 
+export const APP_VERSION = '2026.10.07';
 let state = store.load();
 const app = document.getElementById('app');
 let tickId = null;
@@ -29,7 +30,7 @@ const levelDots = (n) => '●'.repeat(n) + '○'.repeat(5 - n);
 function shell(inner, { plain = false } = {}) {
   const nav = `<header class="topbar"><a class="brand" href="#/">GRE<span>Practice Lab</span></a>
     <nav><a href="#/">Dashboard</a><a href="#/vocab">Kosakata</a><a href="#/essay">Esai</a><a href="#/mistakes">Kesalahan${Object.keys(state.missed).length ? ` <em>${Object.keys(state.missed).length}</em>` : ''}</a><a href="#/about">Panduan</a><a href="#/settings">Pengaturan</a></nav></header>`;
-  return `${plain ? '' : nav}<main class="${plain ? 'test-main' : 'container'}">${inner}</main>${toast ? `<div class="toast">${esc(toast)}</div>` : ''}`;
+  return `${plain ? '' : nav}<main class="${plain ? 'test-main' : 'container'}">${inner}${plain ? '' : `<p class="version">Versi ${APP_VERSION}</p>`}</main>${toast ? `<div class="toast">${esc(toast)}</div>` : ''}`;
 }
 function render(html, opts) {
   const y = window.scrollY;
